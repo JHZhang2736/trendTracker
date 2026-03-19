@@ -1,14 +1,49 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BarChart3, Brain, Bell, Database } from "lucide-react"
+import { api, type HealthStatus } from "@/lib/api"
 
 export default function DashboardPage() {
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [healthError, setHealthError] = useState(false)
+
+  useEffect(() => {
+    api
+      .health()
+      .then((data) => setHealth(data))
+      .catch(() => setHealthError(true))
+  }, [])
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">仪表盘</h1>
         <p className="text-muted-foreground mt-1">全网趋势概览</p>
       </div>
+
+      {/* Backend Status */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">后端服务</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center gap-3">
+          {health ? (
+            <>
+              <Badge variant="default" className="bg-green-500 hover:bg-green-500">
+                {health.status === "ok" ? "正常" : health.status}
+              </Badge>
+              <span className="text-xs text-muted-foreground">v{health.version}</span>
+            </>
+          ) : healthError ? (
+            <Badge variant="destructive">离线</Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">连接中…</span>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
