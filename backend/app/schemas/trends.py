@@ -14,6 +14,19 @@ class TrendItem(BaseModel):
     heat_score: float | None
     url: str | None
     collected_at: datetime
+    convergence_score: float
+
+
+class TopTrendItem(BaseModel):
+    keyword: str
+    platforms: list[str]
+    max_heat_score: float | None
+    latest_collected_at: datetime
+    convergence_score: float
+
+
+class TopTrendsResponse(BaseModel):
+    items: list[TopTrendItem]
 
 
 class TrendsListResponse(BaseModel):
