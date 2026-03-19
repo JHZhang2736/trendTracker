@@ -15,23 +15,23 @@ from app.collectors.google_mock import GoogleMockCollector
 # ---------------------------------------------------------------------------
 
 _RSS_XML = """<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:ht="https://trends.google.com/trends/trendingsearches/daily">
+<rss version="2.0" xmlns:ht="https://trends.google.com/trending/rss">
   <channel>
-    <title>Google Trends - Daily Trending Searches in United States</title>
+    <title>Daily Search Trends</title>
     <item>
       <title>Artificial Intelligence</title>
       <ht:approx_traffic>2,000,000+</ht:approx_traffic>
-      <link>https://trends.google.com/trends/explore?q=Artificial+Intelligence</link>
+      <link>https://trends.google.com/trending/rss?geo=US</link>
     </item>
     <item>
       <title>World Cup 2026</title>
       <ht:approx_traffic>1,500,000+</ht:approx_traffic>
-      <link>https://trends.google.com/trends/explore?q=World+Cup+2026</link>
+      <link>https://trends.google.com/trending/rss?geo=US</link>
     </item>
     <item>
       <title>Stock Market</title>
       <ht:approx_traffic>1,200,000+</ht:approx_traffic>
-      <link>https://trends.google.com/trends/explore?q=Stock+Market</link>
+      <link>https://trends.google.com/trending/rss?geo=US</link>
     </item>
   </channel>
 </rss>"""
@@ -155,7 +155,7 @@ async def test_collect_truncates_at_20():
     )
     big_rss = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<rss version="2.0" xmlns:ht="https://trends.google.com/trends/trendingsearches/daily">'
+        '<rss version="2.0" xmlns:ht="https://trends.google.com/trending/rss">'
         f"<channel>{items_xml}</channel></rss>"
     )
     with _patch_httpx(big_rss):
