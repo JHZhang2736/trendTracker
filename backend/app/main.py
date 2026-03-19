@@ -4,14 +4,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routers import scheduler as scheduler_router
+from app.services.scheduler import setup_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print(f"TrendTracker backend starting — LLM provider: {settings.llm_provider}")
+    sched = setup_scheduler()
+    sched.start()
+    print("APScheduler started")
     yield
     # Shutdown
+    sched.shutdown(wait=False)
     print("TrendTracker backend shutting down")
 
 
@@ -36,6 +42,4 @@ async def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-# Routers will be included here as features are built
-# from app.routers import trends, ai, collector, alerts
-# app.include_router(trends.router, prefix="/api/v1/trends", tags=["Trends"])
+app.include_router(scheduler_router.router, prefix="/api/v1/scheduler", tags=["Scheduler"])
