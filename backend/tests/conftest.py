@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 import app.models  # noqa: F401 — ensure all models are registered on Base.metadata
 from app.collectors.google_mock import GoogleMockCollector
 from app.collectors.registry import registry
+from app.collectors.tiktok_mock import TikTokMockCollector
 from app.collectors.weibo_mock import WeiboMockCollector
 from app.database import Base, get_db
 from app.main import app
@@ -21,13 +22,16 @@ def use_mock_collector():
     """Replace real collectors with mocks for all tests (no network I/O)."""
     registry.register(WeiboMockCollector)
     registry.register(GoogleMockCollector)
+    registry.register(TikTokMockCollector)
     yield
     # Restore real collectors after each test
     from app.collectors.google import GoogleTrendsCollector
+    from app.collectors.tiktok import TikTokCollector
     from app.collectors.weibo import WeiboCollector
 
     registry.register(WeiboCollector)
     registry.register(GoogleTrendsCollector)
+    registry.register(TikTokCollector)
 
 
 @pytest.fixture
