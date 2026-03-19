@@ -9,10 +9,17 @@ from app.database import get_db
 from app.schemas.trends import (
     HeatmapResponse,
     PlatformsResponse,
+    TopByPlatformResponse,
     TopTrendsResponse,
     TrendsListResponse,
 )
-from app.services.trends import get_heatmap, get_platforms, get_top_trends, get_trends
+from app.services.trends import (
+    get_heatmap,
+    get_platforms,
+    get_top_trends,
+    get_top_trends_by_platform,
+    get_trends,
+)
 
 router = APIRouter()
 
@@ -36,6 +43,20 @@ async def top_trends(
     """Return top trending keywords ranked by convergence score (last 24 hours)."""
     items = await get_top_trends(db=db, limit=limit)
     return TopTrendsResponse(items=items)
+
+
+@router.get(
+    "/top-by-platform",
+    summary="各平台独立 Top N 趋势（按平台内收敛评分）",
+    response_model=TopByPlatformResponse,
+)
+async def top_trends_by_platform(
+    limit: int = Query(default=10, ge=1, le=50, description="每个平台返回条数"),
+    db: AsyncSession = Depends(get_db),
+) -> TopByPlatformResponse:
+    """Return top-N keywords per platform, scored independently within each platform."""
+    data = await get_top_trends_by_platform(db=db, limit=limit)
+    return TopByPlatformResponse(platforms=data)
 
 
 @router.get("/heatmap", summary="获取热力图数据（最近24小时）", response_model=HeatmapResponse)

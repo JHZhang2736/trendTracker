@@ -1,278 +1,269 @@
-# 技术分析文档
-# TrendTracker — MVP 技术选型与架构设计
+# 技术文档
+# TrendTracker — 架构设计与实现说明
 
-**文档版本**: v0.1
-**创建日期**: 2026-03-19
-**阶段**: MVP
+**文档版本**: v0.2
+**最后更新**: 2026-03-19
 
 ---
 
-## 1. 技术栈总览
+## 1. 技术栈
 
-| 层级 | 技术选型 | 说明 |
-|------|----------|------|
-| 前端框架 | React + Next.js | App Router，支持 SSR/CSR 混合 |
-| 前端样式 | Tailwind CSS | 原子化 CSS |
-| 前端组件库 | shadcn/ui | 基于 Radix UI，风格统一 |
-| 前端图表 | ECharts（echarts-for-react） | 热力图、折线图、柱状图全覆盖 |
-| 后端语言 | Python 3.11+ | |
-| 后端框架 | FastAPI | 异步、高性能，自动生成 API 文档 |
-| 数据库 | MySQL 8.0 | 趋势数据持久化存储 |
-| ORM | SQLAlchemy 2.0 + Alembic | 数据模型管理与迁移 |
-| 任务调度 | APScheduler | 嵌入 FastAPI，定时触发采集任务 |
-| AI 模型 | 多模型抽象层，初期接入 MiniMax API | 支持后续切换 DeepSeek / 通义千问等 |
-| 容器化 | Docker + Docker Compose | 一键启动所有服务 |
+| 层级 | 技术 | 版本 | 说明 |
+|------|------|------|------|
+| 前端框架 | Next.js App Router | 16.2 | 全 Client Component，useEffect 拉数据 |
+| 前端样式 | Tailwind CSS | v4 | |
+| 前端组件库 | shadcn/ui（基于 **@base-ui/react**） | — | 注意：不是 Radix UI，API 有差异 |
+| 前端图表 | ECharts | 6 | 动态 `import("echarts")` 避免 SSR 报错 |
+| 后端语言 | Python | 3.11+ | |
+| 后端框架 | FastAPI | 0.115+ | |
+| 数据库 | MySQL | 8.0 | |
+| ORM | SQLAlchemy | 2.0 async | |
+| 任务调度 | APScheduler | 3.10 | 嵌入 FastAPI lifespan，可迁移 Celery |
+| AI 层 | MiniMax ChatCompletion V2 | — | 工厂模式，`.env` 一行切换模型 |
+| 容器化 | Docker Compose | — | |
 
 ---
 
 ## 2. 系统架构
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        Docker Compose                         │
-│                                                              │
-│  ┌─────────────────┐         ┌──────────────────────────┐   │
-│  │   Next.js        │ ──API──►│        FastAPI            │   │
-│  │   前端界面        │◄──JSON─│   /api/trends             │   │
-│  │  (Port 3000)     │         │   /api/ai                 │   │
-│  └─────────────────┘         │   /api/alerts             │   │
-│                               │   (Port 8000)             │   │
-│                               └────────────┬─────────────┘   │
-│                                            │                  │
-│              ┌─────────────────────────────┼────────────┐    │
-│              │                             │            │    │
-│              ▼                             ▼            ▼    │
-│  ┌──────────────────┐  ┌─────────────────────┐  ┌──────────┐│
-│  │  Collector Layer  │  │    AI Adapter Layer  │  │  MySQL   ││
-│  │  (插件化采集层)   │  │   (多模型适配层)     │  │ (3306)   ││
-│  │                  │  │                     │  └──────────┘│
-│  │ • GoogleCollector│  │ • MiniMaxAdapter    │              │
-│  │ • TikTokCollector│  │ • DeepSeekAdapter   │              │
-│  │ • WeiboCollector │  │ • QwenAdapter       │              │
-│  │ • BaiduCollector │  │ (统一 LLMProvider   │              │
-│  │ • [可插拔扩展]   │  │  接口)              │              │
-│  └──────────────────┘  └─────────────────────┘              │
-│              ▲                                               │
-│              │ 定时触发                                      │
-│  ┌──────────────────┐                                        │
-│  │   APScheduler    │                                        │
-│  │  (嵌入FastAPI)   │                                        │
-│  └──────────────────┘                                        │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      Docker Compose                          │
+│                                                             │
+│  ┌──────────────┐   fetch    ┌─────────────────────────┐   │
+│  │  Next.js     │ ─────────► │       FastAPI            │   │
+│  │  :3000       │ ◄───JSON── │  /api/v1/trends          │   │
+│  └──────────────┘            │  /api/v1/ai              │   │
+│                               │  /api/v1/alerts          │   │
+│                               │  :8000                   │   │
+│                               └──────────┬──────────────┘   │
+│                                          │                   │
+│              ┌───────────────────────────┼──────────┐       │
+│              ▼                           ▼          ▼       │
+│  ┌──────────────────┐   ┌────────────────────┐  ┌───────┐  │
+│  │  Collector Layer  │   │   AI Layer          │  │ MySQL │  │
+│  │  (asyncio.gather) │   │  (LLMFactory)       │  │ :3306 │  │
+│  │                  │   │                    │  └───────┘  │
+│  │ WeiboCollector   │   │ MiniMaxProvider    │             │
+│  │ GoogleCollector  │   │ (可扩展其他Provider)│             │
+│  │ TikTokCollector  │   └────────────────────┘             │
+│  │ [可插拔]         │                                       │
+│  └──────────────────┘                                       │
+│         ▲  asyncio.gather 并发采集                          │
+│  ┌──────────────────┐                                       │
+│  │   APScheduler    │  collect: 每1小时                     │
+│  │                  │  brief:   每天 08:00                  │
+│  └──────────────────┘                                       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. 插件化采集层设计（核心）
+## 3. 采集层设计
 
-所有数据源实现统一的 `BaseCollector` 抽象接口，新增数据源只需实现接口并注册，无需修改核心逻辑。
+### 3.1 插件化架构
 
-### 3.1 接口定义
+所有数据源实现 `BaseCollector` 抽象接口，通过 `CollectorRegistry` 统一管理。
 
 ```python
-# collectors/base.py
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List
-
-@dataclass
-class TrendItem:
-    keyword: str          # 关键词
-    platform: str         # 来源平台
-    score: float          # 热度分数（归一化到0-100）
-    rank: int | None      # 排名（如有）
-    collected_at: datetime
-    raw_data: dict        # 原始数据，保留备查
-
+# 接口约定（collectors/base.py）
 class BaseCollector(ABC):
-    name: str             # 平台标识，如 "google", "weibo"
-    enabled: bool = True  # 可通过配置动态禁用
+    platform: str          # 平台唯一标识，如 "weibo"
 
     @abstractmethod
-    async def fetch(self) -> List[TrendItem]:
-        """采集数据，返回标准化结果"""
-        pass
+    async def collect(self) -> list[dict]:
+        """返回标准字段列表：platform, keyword, rank, heat_score, url, collected_at"""
 
-    @abstractmethod
-    async def health_check(self) -> bool:
-        """检查数据源是否可用"""
-        pass
-```
-
-### 3.2 Collector 注册中心
-
-```python
-# collectors/registry.py
-class CollectorRegistry:
-    _collectors: dict[str, BaseCollector] = {}
-
-    @classmethod
-    def register(cls, collector: BaseCollector):
-        cls._collectors[collector.name] = collector
-
-    @classmethod
-    def get_enabled(cls) -> list[BaseCollector]:
-        return [c for c in cls._collectors.values() if c.enabled]
-```
-
-### 3.3 各数据源实现方案
-
-| 数据源 | 实现方案 | 依赖库 | 稳定性 |
-|--------|----------|--------|--------|
-| Google Trends | `pytrends`（archived但可用） | pytrends | ⭐⭐⭐ |
-| TikTok | `davidteather/TikTok-Api`（6190⭐） | playwright | ⭐⭐⭐⭐ |
-| 微博热搜 | 自写轻量爬虫（`s.weibo.com/top/summary`，纯HTML） | httpx + bs4 | ⭐⭐⭐⭐ |
-| 百度指数 | `baidu-index-spider`（需账号Cookie） | requests | ⭐⭐（Cookie失效风险） |
-| 阿里指数 | 暂跳过，预留插槽 | — | — |
-
----
-
-## 4. AI 多模型抽象层设计
-
-### 4.1 接口定义
-
-```python
-# ai/base.py
-from abc import ABC, abstractmethod
-
-class BaseLLMProvider(ABC):
-    @abstractmethod
-    async def chat(self, messages: list[dict], **kwargs) -> str:
-        pass
-
-    @abstractmethod
-    async def analyze_trend(self, keyword: str, context: dict) -> TrendAnalysis:
-        """分析单个趋势的商业价值"""
-        pass
-```
-
-### 4.2 Provider 工厂
-
-```python
-# ai/factory.py
-class LLMFactory:
     @staticmethod
-    def create(provider: str) -> BaseLLMProvider:
-        match provider:
-            case "minimax": return MiniMaxProvider()
-            case "deepseek": return DeepSeekProvider()
-            case "qwen":     return QwenProvider()
-            case _: raise ValueError(f"Unknown provider: {provider}")
+    def _now() -> datetime: ...
 ```
 
-通过 `.env` 配置 `LLM_PROVIDER=minimax` 即可切换模型，无需改代码。
+### 3.2 新增平台步骤（仅需 2 个文件）
+
+```
+backend/app/collectors/
+├── {platform}.py       # 1. 实现 BaseCollector，platform = "{platform}"
+├── {platform}_mock.py  # 2. 实现 Mock 版（固定数据，用于 CI 测试）
+└── __init__.py         # 3. 注册：registry.register({Platform}Collector)
+```
+
+前端同步在 `frontend/lib/platform-config.ts` 添加一条展示配置（名称/颜色）。
+
+### 3.3 已实现平台
+
+| 平台 | 数据源 | 热度字段 | 典型量级 |
+|------|--------|----------|---------|
+| `weibo` | `weibo.com/ajax/side/hotSearch` JSON | `num`（热搜指数） | 万级 |
+| `google` | Google Trends 每日 RSS XML | `approx_traffic`（搜索量） | 百万级 |
+| `tiktok` | TikTok Creative Center API JSON | `video_views`（播放量） | 十亿级 |
+
+### 3.4 并发采集
+
+```python
+# services/collector.py
+results = await asyncio.gather(*(_collect_one(slug) for slug in platforms))
+```
+
+所有平台并发采集，总耗时 = 最慢平台耗时（而非各平台之和）。
 
 ---
 
-## 5. 项目目录结构
+## 4. 收敛评分算法
+
+### 4.1 设计原则
+
+各平台热度量纲差异巨大，不可直接横向比较，评分**只在同平台内部有意义**。
+
+### 4.2 计算公式
+
+```python
+def compute_convergence_score(
+    heat_score: float | None,
+    rank: int | None,
+    age_hours: float,
+    platform_max_heat: float,   # 同平台同批次最高热度
+) -> float:
+    # 热度分：该词相对于同平台最高热度的百分比
+    heat_component = min(100.0, heat_score / platform_max_heat * 100)
+        if heat_score and platform_max_heat > 0 else 0.0
+
+    # 排名分：线性，rank=0 → 100分，rank=49 → 0分
+    rank_component = max(0.0, (50 - (rank + 1)) / 50 * 100)
+        if rank is not None else 0.0
+
+    raw = heat_component * 0.5 + rank_component * 0.5
+
+    # 时间衰减：半衰期 12 小时
+    decay = exp(-age_hours * ln(2) / 12)
+
+    return round(min(100.0, max(0.0, raw * decay)), 2)
+```
+
+**关键变化（v0.2）**：
+- `max_heat` 改为**同平台内取**，不再全局取（消除 TikTok 十亿级数值压制其他平台）
+- 移除 `platform_component`（跨平台同词合并几乎不发生）
+
+---
+
+## 5. 前端架构
+
+### 5.1 目录结构（实际）
+
+```
+frontend/
+├── app/                         # App Router
+│   ├── layout.tsx               # 根布局（侧边栏）
+│   ├── page.tsx                 # / 仪表盘（分平台热词排行）
+│   ├── trends/page.tsx          # /trends 趋势列表（分页）
+│   ├── ai/page.tsx              # /ai AI 分析
+│   ├── alerts/page.tsx          # /alerts 告警规则
+│   └── settings/page.tsx        # /settings 设置
+├── components/
+│   ├── AppSidebar.tsx
+│   ├── TopKeywordsChart.tsx     # ECharts 横向柱状图（单平台）
+│   └── ui/                      # shadcn 基础组件
+├── lib/
+│   ├── api.ts                   # 所有后端请求
+│   ├── platform-config.ts       # 平台展示配置（名称/颜色）← 扩展入口
+│   └── utils.ts
+└── hooks/
+    └── use-mobile.ts
+```
+
+### 5.2 平台展示配置（扩展入口）
+
+```typescript
+// lib/platform-config.ts
+export const PLATFORM_CONFIG: Record<string, PlatformMeta> = {
+  weibo:  { displayName: "微博热搜",    color: "#e2231a" },
+  google: { displayName: "Google 趋势", color: "#4285f4" },
+  tiktok: { displayName: "TikTok",      color: "#010101" },
+  // 新增平台在此添加一行 ↑
+}
+```
+
+前端所有组件通过此配置获取展示名和颜色，不硬编码在组件里。
+
+### 5.3 数据流
+
+```
+page.tsx
+  └─ useEffect → api.trends.topByPlatform()
+       └─ lib/api.ts → fetch(NEXT_PUBLIC_API_URL + "/api/v1/trends/top-by-platform")
+            └─ FastAPI → get_top_trends_by_platform(db)
+                 └─ 各平台独立计算收敛评分，返回 {platform: {items: [...]}}
+```
+
+---
+
+## 6. 后端 API 路由总览
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| GET | `/api/v1/trends` | 分页趋势列表（含收敛评分） |
+| GET | `/api/v1/trends/top` | 全局 Top N（按收敛评分，已废弃跨平台合并） |
+| GET | `/api/v1/trends/top-by-platform` | **各平台独立 Top N**（主要使用） |
+| GET | `/api/v1/trends/platforms` | 已注册平台列表 |
+| POST | `/api/v1/collector/run` | 手动触发采集 |
+| POST | `/api/v1/ai/analyze` | AI 单词分析 |
+| POST | `/api/v1/ai/brief` | 手动触发每日简报生成 |
+| GET | `/api/v1/ai/brief/latest` | 获取最新简报 |
+| POST | `/api/v1/alerts/keywords` | 创建关键词监控规则 |
+| GET | `/api/v1/alerts/keywords` | 列出所有监控规则 |
+| GET | `/api/v1/scheduler/status` | 调度器任务状态 |
+
+---
+
+## 7. 关键设计决策
+
+| 决策 | 选择 | 原因 |
+|------|------|------|
+| 评分是否跨平台合并 | ❌ 不合并，各平台独立评分 | 热度量纲差异太大；关键词格式不同无法匹配 |
+| 跨平台展示方式 | 分平台独立柱状图 | 保留各平台语义，用户可自行判断跨平台共振 |
+| 采集并发 | `asyncio.gather` | 从串行 O(n×t) 降为并行 O(max_t) |
+| 任务调度 | APScheduler 嵌入 FastAPI | MVP 任务量小，无需 Celery+Redis；代码解耦便于迁移 |
+| AI Provider | 工厂模式，`.env` 切换 | 国内模型迭代快，切换成本为零 |
+| 组件库 | shadcn + @base-ui/react | 注意：非 Radix UI，改组件时查 Base UI 文档 |
+
+---
+
+## 8. 项目目录结构（实际）
 
 ```
 trendTracker/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                 # FastAPI 入口
-│   │   ├── config.py               # 配置加载
-│   │   ├── database.py             # MySQL 连接
-│   │   ├── scheduler.py            # APScheduler 初始化
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── database.py
 │   │   ├── collectors/
-│   │   │   ├── base.py             # BaseCollector 抽象类
-│   │   │   ├── registry.py         # 注册中心
-│   │   │   ├── google.py           # Google Trends
-│   │   │   ├── tiktok.py           # TikTok
-│   │   │   ├── weibo.py            # 微博热搜
-│   │   │   └── baidu.py            # 百度指数
+│   │   │   ├── base.py          # BaseCollector 抽象类
+│   │   │   ├── registry.py      # CollectorRegistry
+│   │   │   ├── weibo.py         # 微博（真实）
+│   │   │   ├── weibo_mock.py
+│   │   │   ├── google.py        # Google Trends RSS
+│   │   │   ├── google_mock.py
+│   │   │   ├── tiktok.py        # TikTok Creative Center
+│   │   │   └── tiktok_mock.py
 │   │   ├── ai/
-│   │   │   ├── base.py             # BaseLLMProvider
-│   │   │   ├── factory.py          # Provider 工厂
-│   │   │   ├── minimax.py          # MiniMax 实现
-│   │   │   ├── deepseek.py         # DeepSeek 实现（预留）
-│   │   │   └── prompts.py          # Prompt 模板管理
-│   │   ├── models/                 # SQLAlchemy 数据模型
-│   │   ├── schemas/                # Pydantic 请求/响应模型
-│   │   ├── routers/                # FastAPI 路由
-│   │   │   ├── trends.py
-│   │   │   ├── ai.py
-│   │   │   └── alerts.py
-│   │   └── services/               # 业务逻辑层
-│   ├── alembic/                    # 数据库迁移
+│   │   │   ├── base.py          # BaseLLMProvider
+│   │   │   ├── factory.py       # LLMFactory
+│   │   │   └── minimax_provider.py
+│   │   ├── models/              # SQLAlchemy 模型
+│   │   ├── schemas/             # Pydantic 请求/响应
+│   │   ├── routers/             # FastAPI 路由
+│   │   └── services/            # 业务逻辑
 │   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
-│
+│   └── pyproject.toml
 ├── frontend/
-│   ├── src/
-│   │   ├── app/                    # Next.js App Router
-│   │   ├── components/
-│   │   │   ├── ui/                 # shadcn 组件
-│   │   │   ├── charts/             # ECharts 封装组件
-│   │   │   └── trends/             # 业务组件
-│   │   ├── lib/                    # API 调用封装
-│   │   └── types/
-│   ├── package.json
-│   └── Dockerfile
-│
+│   ├── app/                     # Next.js App Router
+│   ├── components/
+│   ├── lib/
+│   │   ├── api.ts
+│   │   └── platform-config.ts   # ← 平台扩展配置入口
+│   └── package.json
 ├── docs/
-│   ├── PRD.md
-│   ├── TECH.md
-│   └── conversation_history.md
-│
 ├── docker-compose.yml
-├── .env.example
-└── README.md
+└── .env.example
 ```
-
----
-
-## 6. Docker Compose 服务编排
-
-```yaml
-# docker-compose.yml（结构示意）
-services:
-  frontend:
-    build: ./frontend
-    ports: ["3000:3000"]
-    depends_on: [backend]
-
-  backend:
-    build: ./backend
-    ports: ["8000:8000"]
-    env_file: .env
-    depends_on: [mysql]
-
-  mysql:
-    image: mysql:8.0
-    ports: ["3306:3306"]
-    volumes: [mysql_data:/var/lib/mysql]
-    environment:
-      MYSQL_DATABASE: trendtracker
-
-volumes:
-  mysql_data:
-```
-
----
-
-## 7. 关键设计决策记录
-
-| 决策 | 选择 | 放弃的选项 | 原因 |
-|------|------|-----------|------|
-| 任务调度 | APScheduler（嵌入FastAPI） | Celery + Redis | MVP阶段任务量小，减少服务数量；代码已解耦便于后续迁移 |
-| 数据源架构 | 插件化 BaseCollector | 硬编码各平台 | 数据源不稳定，需要随时禁用/替换；未来扩展无需改核心逻辑 |
-| AI层架构 | Provider 工厂模式 | 直接调用单一API | 国内模型迭代快，切换成本应为零 |
-| 阿里指数 | 暂跳过 | 爬虫/付费API | 无可用开源方案，付费方案与MVP免费原则冲突 |
-| 图表库 | ECharts | Recharts | 热力图等复杂图表原生支持，中文文档完善 |
-
----
-
-## 8. 待确认的开放问题
-
-| 问题 | 优先级 |
-|------|--------|
-| 百度指数 Cookie 获取与轮换方案 | 中 |
-| TikTok-Api 的 Playwright 在 Docker 内的配置 | 高 |
-| MiniMax API 的 rate limit 与采集频率匹配 | 中 |
-| MySQL 趋势数据的索引设计（时间序列查询优化） | 低（开发时再定） |
-
----
-
-*技术选型完成，下一步：开始开发*

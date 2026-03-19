@@ -1,11 +1,5 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
-interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -16,8 +10,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`API error ${res.status}: ${res.statusText}`)
   }
 
-  const json: ApiResponse<T> = await res.json()
-  return json.data ?? (json as T)
+  const json = await res.json()
+  return json as T
 }
 
 export interface HealthStatus {
@@ -41,6 +35,31 @@ export interface TrendsListResponse {
   items: TrendItem[]
 }
 
+export interface TopTrendItem {
+  keyword: string
+  platforms: string[]
+  max_heat_score: number | null
+  latest_collected_at: string
+  convergence_score: number
+}
+
+export interface TopTrendsResponse {
+  items: TopTrendItem[]
+}
+
+export interface PlatformTrendItem {
+  keyword: string
+  rank: number | null
+  heat_score: number | null
+  url: string | null
+  collected_at: string
+  convergence_score: number
+}
+
+export interface TopByPlatformResponse {
+  platforms: Record<string, PlatformTrendItem[]>
+}
+
 export interface HeatmapResponse {
   platforms: string[]
   time_slots: string[]
@@ -56,6 +75,9 @@ export const api = {
   trends: {
     list: (page = 1, pageSize = 20) =>
       request<TrendsListResponse>(`/api/v1/trends?page=${page}&page_size=${pageSize}`),
-    heatmap: () => request<HeatmapResponse>("/api/v1/trends/heatmap"),
+    top: (limit = 20) =>
+      request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
+    topByPlatform: (limit = 10) =>
+      request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
   },
 }

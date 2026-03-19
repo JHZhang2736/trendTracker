@@ -33,7 +33,7 @@ export function HeatmapChart({ data }: Props) {
       const option = {
         tooltip: {
           position: "top",
-          formatter: (params: { data: number[] }) => {
+          formatter: (params: { data: [number, number, number] }) => {
             const [pIdx, sIdx, value] = params.data
             const platform = platformLabels[pIdx] ?? String(pIdx)
             const slot = data.time_slots[sIdx] ?? String(sIdx)
