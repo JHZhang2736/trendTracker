@@ -25,3 +25,10 @@ class TrendsListResponse(BaseModel):
 
 class PlatformsResponse(BaseModel):
     platforms: list[str]
+
+
+class HeatmapResponse(BaseModel):
+    platforms: list[str]
+    time_slots: list[str]
+    data: list[list[float]]
+    max_heat: float

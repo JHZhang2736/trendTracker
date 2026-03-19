@@ -3,18 +3,28 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { BarChart3, Brain, Bell, Database } from "lucide-react"
-import { api, type HealthStatus } from "@/lib/api"
+import { api, type HealthStatus, type HeatmapResponse } from "@/lib/api"
+import { HeatmapChart } from "@/components/HeatmapChart"
 
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthError, setHealthError] = useState(false)
+  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null)
+  const [heatmapLoading, setHeatmapLoading] = useState(true)
 
   useEffect(() => {
     api
       .health()
       .then((data) => setHealth(data))
       .catch(() => setHealthError(true))
+
+    api.trends
+      .heatmap()
+      .then((data) => setHeatmap(data))
+      .catch(() => setHeatmap(null))
+      .finally(() => setHeatmapLoading(false))
   }, [])
 
   return (
@@ -91,6 +101,24 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Heatmap */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">热度分布（近24小时）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {heatmapLoading ? (
+            <Skeleton className="w-full h-80" />
+          ) : heatmap && heatmap.platforms.length > 0 ? (
+            <HeatmapChart data={heatmap} />
+          ) : (
+            <div className="h-80 flex items-center justify-center text-muted-foreground text-sm">
+              暂无数据，请先在趋势列表页点击「立即采集」
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Platform Status */}
       <Card>
