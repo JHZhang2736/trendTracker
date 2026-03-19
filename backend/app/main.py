@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routers import ai as ai_router
 from app.routers import collector as collector_router
 from app.routers import scheduler as scheduler_router
 from app.routers import trends as trends_router
@@ -47,3 +48,4 @@ async def health():
 app.include_router(scheduler_router.router, prefix="/api/v1/scheduler", tags=["Scheduler"])
 app.include_router(collector_router.router, prefix="/api/v1/collector", tags=["Collector"])
 app.include_router(trends_router.router, prefix="/api/v1/trends", tags=["Trends"])
+app.include_router(ai_router.router, prefix="/api/v1/ai", tags=["AI"])
