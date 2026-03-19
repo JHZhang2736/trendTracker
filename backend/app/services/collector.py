@@ -52,4 +52,10 @@ async def run_all_collectors(db: AsyncSession) -> dict:
             pass
 
     await db.commit()
+
+    # Check keyword alert thresholds after each collection run
+    from app.services.alerts import check_alerts
+
+    await check_alerts(db)
+
     return {"status": "ok", "records_count": total_records}
