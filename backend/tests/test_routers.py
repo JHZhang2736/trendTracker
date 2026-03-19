@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.trend import Trend
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/collector/run
@@ -117,3 +123,48 @@ async def test_trends_platforms_response_schema(test_client: AsyncClient):
 async def test_trends_platforms_contains_weibo(test_client: AsyncClient):
     resp = await test_client.get("/api/v1/trends/platforms")
     assert "weibo" in resp.json()["platforms"]
+
+
+# ---------------------------------------------------------------------------
+# Dedup: repeat collection within same hour should not grow record count
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_repeat_collection_same_hour_does_not_duplicate(
+    test_client: AsyncClient, db_session: AsyncSession
+):
+    """Two collection runs within the same hour should yield the same row count."""
+    await test_client.post("/api/v1/collector/run")
+    count_result = await db_session.execute(select(func.count()).select_from(Trend))
+    count_after_first = count_result.scalar_one()
+
+    await test_client.post("/api/v1/collector/run")
+    count_result = await db_session.execute(select(func.count()).select_from(Trend))
+    count_after_second = count_result.scalar_one()
+
+    assert count_after_second == count_after_first
+
+
+@pytest.mark.asyncio
+async def test_cross_hour_data_is_preserved(
+    test_client: AsyncClient, db_session: AsyncSession
+):
+    """Records from a previous hour must survive a new collection run."""
+    # Manually insert a record from 2 hours ago
+    old_time = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
+    from datetime import timedelta
+    old_time = old_time - timedelta(hours=2)
+    db_session.add(
+        Trend(platform="weibo", keyword="历史词", rank=0, heat_score=999.0, collected_at=old_time)
+    )
+    await db_session.commit()
+
+    # Run collection (current hour) — should not touch the old record
+    await test_client.post("/api/v1/collector/run")
+
+    result = await db_session.execute(
+        select(Trend).where(Trend.keyword == "历史词")
+    )
+    old_rows = result.scalars().all()
+    assert len(old_rows) == 1, "Cross-hour historical record should not be deleted"
