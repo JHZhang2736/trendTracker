@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import app
+from httpx import AsyncClient
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/collector/run
@@ -13,16 +11,14 @@ from app.main import app
 
 
 @pytest.mark.asyncio
-async def test_collector_run_returns_200():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/collector/run")
+async def test_collector_run_returns_200(test_client: AsyncClient):
+    resp = await test_client.post("/api/v1/collector/run")
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_collector_run_response_schema():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/collector/run")
+async def test_collector_run_response_schema(test_client: AsyncClient):
+    resp = await test_client.post("/api/v1/collector/run")
     data = resp.json()
     assert "status" in data
     assert "records_count" in data
@@ -30,16 +26,14 @@ async def test_collector_run_response_schema():
 
 
 @pytest.mark.asyncio
-async def test_collector_run_status_ok():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/collector/run")
+async def test_collector_run_status_ok(test_client: AsyncClient):
+    resp = await test_client.post("/api/v1/collector/run")
     assert resp.json()["status"] == "ok"
 
 
 @pytest.mark.asyncio
-async def test_collector_run_records_count_positive():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/collector/run")
+async def test_collector_run_records_count_positive(test_client: AsyncClient):
+    resp = await test_client.post("/api/v1/collector/run")
     assert resp.json()["records_count"] > 0
 
 
@@ -49,16 +43,14 @@ async def test_collector_run_records_count_positive():
 
 
 @pytest.mark.asyncio
-async def test_trends_list_returns_200():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends")
+async def test_trends_list_returns_200(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends")
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_trends_list_response_schema():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends")
+async def test_trends_list_response_schema(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends")
     data = resp.json()
     assert "total" in data
     assert "page" in data
@@ -68,10 +60,10 @@ async def test_trends_list_response_schema():
 
 
 @pytest.mark.asyncio
-async def test_trends_list_item_schema():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends")
-    items = resp.json()["items"]
+async def test_trends_list_item_schema(test_client: AsyncClient):
+    # Seed data via collector, then check list schema
+    await test_client.post("/api/v1/collector/run")
+    items = (await test_client.get("/api/v1/trends")).json()["items"]
     assert len(items) > 0
     required = {"platform", "keyword", "rank", "heat_score", "url", "collected_at"}
     for item in items:
@@ -79,29 +71,25 @@ async def test_trends_list_item_schema():
 
 
 @pytest.mark.asyncio
-async def test_trends_list_default_pagination():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends")
+async def test_trends_list_default_pagination(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends")
     data = resp.json()
     assert data["page"] == 1
     assert data["page_size"] == 20
 
 
 @pytest.mark.asyncio
-async def test_trends_list_custom_pagination():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends?page=1&page_size=2")
-    data = resp.json()
+async def test_trends_list_custom_pagination(test_client: AsyncClient):
+    await test_client.post("/api/v1/collector/run")
+    data = (await test_client.get("/api/v1/trends?page=1&page_size=2")).json()
     assert data["page"] == 1
     assert data["page_size"] == 2
     assert len(data["items"]) <= 2
 
 
 @pytest.mark.asyncio
-async def test_trends_list_page_out_of_range():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends?page=999&page_size=20")
-    data = resp.json()
+async def test_trends_list_page_out_of_range(test_client: AsyncClient):
+    data = (await test_client.get("/api/v1/trends?page=999&page_size=20")).json()
     assert data["page"] == 999
     assert data["items"] == []
 
@@ -112,23 +100,20 @@ async def test_trends_list_page_out_of_range():
 
 
 @pytest.mark.asyncio
-async def test_trends_platforms_returns_200():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends/platforms")
+async def test_trends_platforms_returns_200(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends/platforms")
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_trends_platforms_response_schema():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends/platforms")
+async def test_trends_platforms_response_schema(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends/platforms")
     data = resp.json()
     assert "platforms" in data
     assert isinstance(data["platforms"], list)
 
 
 @pytest.mark.asyncio
-async def test_trends_platforms_contains_weibo():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/v1/trends/platforms")
+async def test_trends_platforms_contains_weibo(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/trends/platforms")
     assert "weibo" in resp.json()["platforms"]

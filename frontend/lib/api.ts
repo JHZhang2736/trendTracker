@@ -25,9 +25,29 @@ export interface HealthStatus {
   version: string
 }
 
+export interface TrendItem {
+  platform: string
+  keyword: string
+  rank: number | null
+  heat_score: number | null
+  url: string | null
+  collected_at: string
+}
+
+export interface TrendsListResponse {
+  total: number
+  page: number
+  page_size: number
+  items: TrendItem[]
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   health: () => request<HealthStatus>("/health"),
+  trends: {
+    list: (page = 1, pageSize = 20) =>
+      request<TrendsListResponse>(`/api/v1/trends?page=${page}&page_size=${pageSize}`),
+  },
 }
