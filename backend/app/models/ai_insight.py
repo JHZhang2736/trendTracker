@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,7 +15,10 @@ if TYPE_CHECKING:
 class AIInsight(Base):
     __tablename__ = "ai_insights"
 
+    __table_args__ = (Index("ix_ai_insights_keyword", "keyword"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    keyword: Mapped[str] = mapped_column(String(200), nullable=False)
     trend_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("trends.id", ondelete="SET NULL"), nullable=True
     )
