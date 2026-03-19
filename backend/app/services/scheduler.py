@@ -6,12 +6,28 @@ import logging
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 logger = logging.getLogger(__name__)
 
 # Global scheduler instance reused across the application lifecycle.
 scheduler = AsyncIOScheduler()
+
+
+async def daily_brief_job() -> None:
+    """Scheduled job: generate daily brief and send email."""
+    logger.info("daily_brief_job: starting daily brief generation")
+    try:
+        from app.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            from app.services.brief import generate_daily_brief
+
+            brief = await generate_daily_brief(db=db, send_mail=True)
+            logger.info("daily_brief_job: brief generated id=%d date=%s", brief.id, brief.date)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("daily_brief_job: error — %s", exc)
 
 
 async def collect_trends_job() -> None:
@@ -44,6 +60,17 @@ def setup_scheduler() -> AsyncIOScheduler:
             replace_existing=True,
         )
         logger.info("setup_scheduler: registered 'collect_trends' job (every 1 hour)")
+
+    if scheduler.get_job("daily_brief") is None:
+        scheduler.add_job(
+            daily_brief_job,
+            trigger=CronTrigger(hour=8, minute=0),
+            id="daily_brief",
+            name="Generate daily AI brief",
+            replace_existing=True,
+        )
+        logger.info("setup_scheduler: registered 'daily_brief' job (daily 08:00)")
+
     return scheduler
 
 
