@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { BarChart3, Brain, Bell, LayoutDashboard, Settings } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +16,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const navItems = [
+const navItems: { title: string; href: string; icon: LucideIcon }[] = [
   { title: "仪表盘", href: "/", icon: LayoutDashboard },
   { title: "趋势列表", href: "/trends", icon: BarChart3 },
   { title: "AI 洞察", href: "/ai", icon: Brain },
@@ -43,11 +44,12 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={pathname === item.href}>
-                    <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                  <SidebarMenuButton
+                    isActive={pathname === item.href}
+                    render={<Link href={item.href} />}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
