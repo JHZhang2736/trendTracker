@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.collectors.registry import registry
@@ -36,9 +37,20 @@ async def _collect_one(platform_slug: str) -> tuple[str, list[dict]]:
 async def run_all_collectors(db: AsyncSession) -> dict:
     """Run all registered collectors concurrently, persist results, return summary.
 
+    Each platform uses replace-by-hour semantics: existing records for the same
+    platform within the current clock-hour are deleted before inserting the fresh
+    batch.  This prevents duplicate rows when collection is triggered more than
+    once within the same hour (e.g. manual + scheduled), while preserving all
+    cross-hour historical data for trend charts.
+
     Returns a dict with ``status`` and ``records_count``.
     """
     platforms = registry.list_platforms()
+
+    # Current hour bucket (naive UTC, matching DB storage)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    hour_end = hour_start + timedelta(hours=1)
 
     # Collect from all platforms in parallel
     results = await asyncio.gather(*(_collect_one(slug) for slug in platforms))
@@ -47,6 +59,16 @@ async def run_all_collectors(db: AsyncSession) -> dict:
     for platform_slug, records in results:
         if not records:
             continue
+
+        # Replace-by-hour: remove stale records in the current hour bucket
+        await db.execute(
+            delete(Trend).where(
+                Trend.platform == platform_slug,
+                Trend.collected_at >= hour_start,
+                Trend.collected_at < hour_end,
+            )
+        )
+
         platform_id = await _ensure_platform(db, platform_slug)
         for rec in records:
             db.add(

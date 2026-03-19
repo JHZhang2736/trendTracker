@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.services.scheduler import collect_trends_job, get_jobs_status, setup_scheduler
+from app.services.scheduler import (
+    cleanup_old_trends_job,
+    collect_trends_job,
+    get_jobs_status,
+    setup_scheduler,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +97,34 @@ async def test_scheduler_status_endpoint():
     assert "running" in data
     assert "jobs" in data
     assert isinstance(data["jobs"], list)
+
+
+def test_setup_scheduler_registers_cleanup_job():
+    sched = setup_scheduler()
+    job = sched.get_job("cleanup_old_trends")
+    assert job is not None
+    assert job.id == "cleanup_old_trends"
+
+
+def test_cleanup_job_trigger_is_cron():
+    from apscheduler.triggers.cron import CronTrigger
+
+    sched = setup_scheduler()
+    job = sched.get_job("cleanup_old_trends")
+    assert isinstance(job.trigger, CronTrigger)
+
+
+def test_get_jobs_status_contains_cleanup():
+    setup_scheduler()
+    status = get_jobs_status()
+    ids = [j["id"] for j in status]
+    assert "cleanup_old_trends" in ids
+
+
+@pytest.mark.asyncio
+async def test_cleanup_old_trends_job_runs_without_error():
+    """The cleanup job should not raise even when the DB has no old records."""
+    await cleanup_old_trends_job()
 
 
 @pytest.mark.asyncio
