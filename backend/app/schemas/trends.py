@@ -40,6 +40,19 @@ class PlatformsResponse(BaseModel):
     platforms: list[str]
 
 
+class PlatformTrendItem(BaseModel):
+    keyword: str
+    rank: int | None
+    heat_score: float | None
+    url: str | None
+    collected_at: datetime
+    convergence_score: float
+
+
+class TopByPlatformResponse(BaseModel):
+    platforms: dict[str, list[PlatformTrendItem]]
+
+
 class HeatmapResponse(BaseModel):
     platforms: list[str]
     time_slots: list[str]

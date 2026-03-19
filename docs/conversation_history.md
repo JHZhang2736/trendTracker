@@ -176,3 +176,12 @@
 - Issue #6 (PR #10)：BaseCollector 抽象类、CollectorRegistry 单例、WeiboMockCollector（UTC-aware），13个测试通过。
 - Issue #7 (PR #11)：BaseLLMProvider 抽象类、ChatMessage/ChatResponse/AnalyzeResponse 数据类、LLMFactory 动态导入工厂、MiniMaxProvider stub，14个测试通过。
 - Issue #8 (PR #12)：AsyncIOScheduler 嵌入 FastAPI lifespan、collect_trends 每小时任务、GET /api/v1/scheduler/status 接口，9个测试通过。全套52个测试均通过，ruff + black 全部干净。
+
+---
+
+**[用户]** 完成 issue #15
+
+**[AI]** 在 feature/issue-15-frontend-skeleton 分支实现前端骨架，修改2个文件：
+- `frontend/lib/api.ts`：新增 `HealthStatus` 类型和 `api.health()` 方法
+- `frontend/app/page.tsx`：改为 client component，调用 `/health` 接口显示后端状态（正常/离线/连接中）
+`npm run build` 无报错，创建 PR #25。

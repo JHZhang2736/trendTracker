@@ -5,14 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BarChart3, Brain, Bell, Database } from "lucide-react"
-import { api, type HealthStatus, type HeatmapResponse } from "@/lib/api"
-import { HeatmapChart } from "@/components/HeatmapChart"
+import { api, type HealthStatus, type PlatformTrendItem } from "@/lib/api"
+import { TopKeywordsChart } from "@/components/TopKeywordsChart"
+import { getPlatformMeta } from "@/lib/platform-config"
 
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthError, setHealthError] = useState(false)
-  const [heatmap, setHeatmap] = useState<HeatmapResponse | null>(null)
-  const [heatmapLoading, setHeatmapLoading] = useState(true)
+  const [platformTrends, setPlatformTrends] = useState<Record<string, PlatformTrendItem[]>>({})
+  const [trendsLoading, setTrendsLoading] = useState(true)
 
   useEffect(() => {
     api
@@ -21,11 +22,13 @@ export default function DashboardPage() {
       .catch(() => setHealthError(true))
 
     api.trends
-      .heatmap()
-      .then((data) => setHeatmap(data))
-      .catch(() => setHeatmap(null))
-      .finally(() => setHeatmapLoading(false))
+      .topByPlatform(10)
+      .then((data) => setPlatformTrends(data.platforms))
+      .catch(() => setPlatformTrends({}))
+      .finally(() => setTrendsLoading(false))
   }, [])
+
+  const platformEntries = Object.entries(platformTrends)
 
   return (
     <div className="space-y-6">
@@ -102,23 +105,53 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Heatmap */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">热度分布（近24小时）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {heatmapLoading ? (
+      {/* Per-Platform Top Keywords */}
+      {trendsLoading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">热词排行（近24小时 · 收敛评分）</CardTitle>
+          </CardHeader>
+          <CardContent>
             <Skeleton className="w-full h-80" />
-          ) : heatmap && heatmap.platforms.length > 0 ? (
-            <HeatmapChart data={heatmap} />
-          ) : (
-            <div className="h-80 flex items-center justify-center text-muted-foreground text-sm">
+          </CardContent>
+        </Card>
+      ) : platformEntries.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          {platformEntries.map(([platform, items]) => {
+            const meta = getPlatformMeta(platform)
+            return (
+              <Card key={platform}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: meta.color }}
+                    />
+                    {meta.displayName}
+                    <span className="text-xs font-normal text-muted-foreground ml-auto">
+                      收敛评分 0–100
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <TopKeywordsChart items={items} color={meta.color} />
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">热词排行（近24小时 · 收敛评分）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
               暂无数据，请先在趋势列表页点击「立即采集」
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Platform Status */}
       <Card>
