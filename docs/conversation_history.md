@@ -166,3 +166,13 @@
 **[用户]** 你准备要开始着手代码编写了，但首先请计划一个详细的开发流程，包括开发的顺序（前端，后端，docker），开发形式（构建-测试，基于issue开发），自动化文档系统，仓库管理规范，代码规范等
 
 **[AI]** 生成 `docs/DEV_WORKFLOW.md`，内容包括：①开发顺序（Phase 0基础环境→Phase 1后端骨架→Phase 2前端骨架→Phase N垂直切片，共10个Issue优先级排序）②分支策略（GitHub Flow，feature/fix/chore分支）③Commit规范（Conventional Commits）④代码规范（Python: ruff+black+mypy；TS: eslint+prettier）⑤测试策略（pytest单元/集成测试，前端MVP阶段仅测工具函数）⑥自动化文档（FastAPI内置Swagger+git-cliff自动生成Changelog）⑦Pre-commit Hook质量门禁⑧环境变量管理（.env.example提交，.env忽略）。
+
+---
+
+**[用户]** You are working on TrendTracker project. Your task is to implement Phase 1 backend skeleton with 4 sub-phases (separate GitHub Issues): A) SQLAlchemy Models (8 tables), B) BaseCollector + CollectorRegistry + WeiboMockCollector, C) BaseLLMProvider + LLMFactory + MiniMaxProvider, D) APScheduler integration. Work autonomously and complete ALL tasks before returning.
+
+**[AI]** 创建 Issues #5-#8，分4个功能分支依次完成并 Squash Merge 到 main。
+- Issue #5 (PR #9)：8张 SQLAlchemy 2.0 ORM 模型，使用 Mapped/mapped_column + TYPE_CHECKING 前向引用，16个测试通过。
+- Issue #6 (PR #10)：BaseCollector 抽象类、CollectorRegistry 单例、WeiboMockCollector（UTC-aware），13个测试通过。
+- Issue #7 (PR #11)：BaseLLMProvider 抽象类、ChatMessage/ChatResponse/AnalyzeResponse 数据类、LLMFactory 动态导入工厂、MiniMaxProvider stub，14个测试通过。
+- Issue #8 (PR #12)：AsyncIOScheduler 嵌入 FastAPI lifespan、collect_trends 每小时任务、GET /api/v1/scheduler/status 接口，9个测试通过。全套52个测试均通过，ruff + black 全部干净。
