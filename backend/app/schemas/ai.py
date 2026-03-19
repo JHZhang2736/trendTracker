@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -18,5 +18,13 @@ class AnalyzeResult(BaseModel):
     business_insight: str
     sentiment: Literal["positive", "negative", "neutral"]
     related_keywords: list[str]
+    model: str | None
+    created_at: datetime
+
+
+class BriefResponse(BaseModel):
+    id: int
+    date: date
+    content: str
     model: str | None
     created_at: datetime
