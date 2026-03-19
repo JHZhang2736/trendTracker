@@ -60,6 +60,13 @@ export interface TopByPlatformResponse {
   platforms: Record<string, PlatformTrendItem[]>
 }
 
+export interface HeatmapResponse {
+  platforms: string[]
+  time_slots: string[]
+  data: number[][]
+  max_heat: number
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
