@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.trends import PlatformsResponse, TrendsListResponse
-from app.services.trends import get_platforms, get_trends
+from app.schemas.trends import HeatmapResponse, PlatformsResponse, TrendsListResponse
+from app.services.trends import get_heatmap, get_platforms, get_trends
 
 router = APIRouter()
 
@@ -21,6 +21,13 @@ async def list_trends(
     """Return a paginated list of trend records from the database."""
     data = await get_trends(db=db, page=page, page_size=page_size)
     return TrendsListResponse(**data)
+
+
+@router.get("/heatmap", summary="获取热力图数据（最近24小时）", response_model=HeatmapResponse)
+async def trends_heatmap(db: AsyncSession = Depends(get_db)) -> HeatmapResponse:
+    """Return heatmap data grouped by platform × hour for the last 24 hours."""
+    data = await get_heatmap(db=db)
+    return HeatmapResponse(**data)
 
 
 @router.get("/platforms", summary="获取已注册平台列表", response_model=PlatformsResponse)
