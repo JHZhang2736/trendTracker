@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Scheduler
     collect_cron: str = "0 6 * * *"
 
+    # TikTok
+    tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session
+
     # Email
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587

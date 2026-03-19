@@ -8,8 +8,8 @@ import httpx
 
 from app.collectors.base import BaseCollector
 
-_RSS_URL = "https://trends.google.com/trends/trendingsearches/daily/rss"
-_NS = {"ht": "https://trends.google.com/trends/trendingsearches/daily"}
+_RSS_URL = "https://trends.google.com/trending/rss"
+_NS = {"ht": "https://trends.google.com/trending/rss"}
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

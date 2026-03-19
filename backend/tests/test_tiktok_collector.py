@@ -29,7 +29,14 @@ _API_RESPONSE = {
 }
 
 
+_FAKE_COOKIE = "csrftoken=testtoken; sessionid=abc123"
+
+
 def _patch_httpx(response_body: dict = _API_RESPONSE):
+    """Patch httpx.AsyncClient AND settings.tiktok_cookie for collector tests."""
+    from contextlib import ExitStack
+    from unittest.mock import patch as _patch
+
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = response_body
@@ -37,7 +44,20 @@ def _patch_httpx(response_body: dict = _API_RESPONSE):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get = AsyncMock(return_value=mock_resp)
-    return patch("httpx.AsyncClient", return_value=mock_client)
+
+    class _Combined:
+        def __enter__(self):
+            self._stack = ExitStack()
+            self._stack.enter_context(_patch("httpx.AsyncClient", return_value=mock_client))
+            self._stack.enter_context(
+                _patch("app.collectors.tiktok.settings.tiktok_cookie", _FAKE_COOKIE)
+            )
+            return mock_client
+
+        def __exit__(self, *args):
+            self._stack.__exit__(*args)
+
+    return _Combined()
 
 
 # ---------------------------------------------------------------------------
@@ -172,10 +192,52 @@ async def test_collect_custom_country_code():
         return mock_resp
 
     mock_client.get = fake_get
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with (
+        patch("httpx.AsyncClient", return_value=mock_client),
+        patch("app.collectors.tiktok.settings.tiktok_cookie", _FAKE_COOKIE),
+    ):
         await collector.collect()
 
     assert "country_code=JP" in captured[0]
+
+
+@pytest.mark.asyncio
+async def test_collect_returns_empty_when_cookie_not_configured():
+    """Without TIKTOK_COOKIE configured, collector returns [] without hitting network."""
+    with patch("app.collectors.tiktok.settings.tiktok_cookie", ""):
+        results = await TikTokCollector().collect()
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_collect_sends_csrf_token_header():
+    """csrftoken value from cookie is forwarded as X-CSRFToken header."""
+    captured_headers: dict = {}
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = _API_RESPONSE
+
+    inner_client = AsyncMock()
+    inner_client.get = AsyncMock(return_value=mock_resp)
+
+    class FakeClient:
+        def __init__(self, headers=None, **kwargs):
+            captured_headers.update(headers or {})
+
+        async def __aenter__(self):
+            return inner_client
+
+        async def __aexit__(self, *args):
+            pass
+
+    with (
+        patch("httpx.AsyncClient", FakeClient),
+        patch("app.collectors.tiktok.settings.tiktok_cookie", _FAKE_COOKIE),
+    ):
+        await TikTokCollector().collect()
+
+    assert captured_headers.get("X-CSRFToken") == "testtoken"
 
 
 @pytest.mark.asyncio
