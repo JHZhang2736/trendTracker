@@ -1,6 +1,9 @@
 [build-system]
 requires = ["setuptools>=68"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [project]
 name = "trendtracker-backend"
@@ -11,6 +14,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "sqlalchemy[asyncio]>=2.0",
     "aiomysql>=0.2",
+    "cryptography>=42.0",
     "alembic>=1.13",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
