@@ -20,8 +20,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return json.data ?? (json as T)
 }
 
+export interface HealthStatus {
+  status: string
+  version: string
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  health: () => request<HealthStatus>("/health"),
 }
