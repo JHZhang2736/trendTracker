@@ -185,3 +185,19 @@
 - `frontend/lib/api.ts`：新增 `HealthStatus` 类型和 `api.health()` 方法
 - `frontend/app/page.tsx`：改为 client component，调用 `/health` 接口显示后端状态（正常/离线/连接中）
 `npm run build` 无报错，创建 PR #25。
+
+---
+
+## 2026-03-20（续）
+
+---
+
+**[用户]** bug:一点击进入仪表盘中，热词总数统计不正确，并且热度图中每个列表只有5条数据，再次点击回趋势列表后，每个板块数据也仅剩5条了
+
+**[AI]** 诊断出两个 Bug：
+1. 仪表盘调用 `api.trends.list(1,1)` 获取总数，但该接口只返回24h窗口数据，标签却写"数据库历史记录"
+2. Next.js fetch 默认缓存导致页面间导航时返回过期数据
+修复：
+- 后端新增 `GET /api/v1/trends/count` 全量计数端点（`get_total_count` service）
+- 前端 `api.ts` 添加 `cache: "no-store"` 禁用 fetch 缓存
+- 仪表盘改用 `api.trends.count()` 获取真实总数

@@ -24,7 +24,7 @@ export default function DashboardPage() {
     api.health().then(setHealth).catch(() => setHealthError(true))
 
     api.trends
-      .list(1, 1)
+      .count()
       .then((d) => setTotalTrends(d.total))
       .catch(() => setTotalTrends(null))
 
