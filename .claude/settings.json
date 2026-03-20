@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"D:/桌面/trendTracker/.claude/hooks/pre_commit_lint.py\"",
+            "statusMessage": "检查 Python 代码格式（ruff + black）…"
+          }
+        ]
+      }
+    ]
+  }
+}
