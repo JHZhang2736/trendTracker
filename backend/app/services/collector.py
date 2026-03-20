@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.collectors.registry import registry
 from app.models.platform import Platform
 from app.models.trend import Trend
+
+logger = logging.getLogger(__name__)
 
 
 async def _ensure_platform(db: AsyncSession, slug: str) -> int:
@@ -24,14 +27,15 @@ async def _ensure_platform(db: AsyncSession, slug: str) -> int:
     return platform.id
 
 
-async def _collect_one(platform_slug: str) -> tuple[str, list[dict]]:
-    """Run a single collector and return (platform_slug, records). Never raises."""
+async def _collect_one(platform_slug: str) -> tuple[str, list[dict], str | None]:
+    """Run a single collector and return (platform_slug, records, error). Never raises."""
     collector_cls = registry.get(platform_slug)
     try:
         records = await collector_cls().collect()
-        return platform_slug, records or []
-    except Exception:  # noqa: BLE001
-        return platform_slug, []
+        return platform_slug, records or [], None
+    except Exception as exc:  # noqa: BLE001
+        logger.error("_collect_one[%s]: failed — %s: %s", platform_slug, type(exc).__name__, exc)
+        return platform_slug, [], str(exc)
 
 
 async def run_all_collectors(db: AsyncSession) -> dict:
@@ -56,7 +60,9 @@ async def run_all_collectors(db: AsyncSession) -> dict:
     results = await asyncio.gather(*(_collect_one(slug) for slug in platforms))
 
     total_records = 0
-    for platform_slug, records in results:
+    platform_results = []
+    for platform_slug, records, error in results:
+        platform_results.append({"platform": platform_slug, "count": len(records), "error": error})
         if not records:
             continue
 
@@ -91,4 +97,4 @@ async def run_all_collectors(db: AsyncSession) -> dict:
 
     await check_alerts(db)
 
-    return {"status": "ok", "records_count": total_records}
+    return {"status": "ok", "records_count": total_records, "platforms": platform_results}
