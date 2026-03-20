@@ -98,19 +98,33 @@ export interface AlertRulesResponse {
   items: AlertRule[]
 }
 
+export interface SystemConfig {
+  ai: { provider: string; configured: boolean }
+  email: { configured: boolean; smtp_host: string; smtp_port: number; notify_email: string | null }
+  tiktok: { configured: boolean }
+  scheduler: { collect_cron: string }
+}
+
+export interface SchedulerStatus {
+  running: boolean
+  jobs: { id: string; name: string; next_run_time: string | null; trigger: string }[]
+}
+
+export interface CollectorRunResponse {
+  status: string
+  records_count: number
+  platforms: { platform: string; count: number; error: string | null }[]
+}
+
+export interface TrendsClearResponse {
+  deleted: number
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   health: () => request<HealthStatus>("/health"),
-  trends: {
-    list: (page = 1, pageSize = 20) =>
-      request<TrendsListResponse>(`/api/v1/trends?page=${page}&page_size=${pageSize}`),
-    top: (limit = 20) =>
-      request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
-    topByPlatform: (limit = 10) =>
-      request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
-  },
   ai: {
     analyze: (keyword: string) =>
       request<AnalyzeResult>("/api/v1/ai/analyze", {
@@ -128,5 +142,19 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ keyword, threshold, notify_email }),
       }),
+  },
+  scheduler: {
+    status: () => request<SchedulerStatus>("/api/v1/scheduler/status"),
+  },
+  system: {
+    config: () => request<SystemConfig>("/api/v1/system/config"),
+  },
+  trends: {
+    list: (page = 1, pageSize = 20) =>
+      request<TrendsListResponse>(`/api/v1/trends?page=${page}&page_size=${pageSize}`),
+    top: (limit = 20) => request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
+    topByPlatform: (limit = 10) =>
+      request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
+    clearAll: () => request<TrendsClearResponse>("/api/v1/trends/all", { method: "DELETE" }),
   },
 }

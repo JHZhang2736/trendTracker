@@ -215,3 +215,67 @@ async def test_cross_hour_data_is_preserved(
     )
     old_rows = result.scalars().all()
     assert len(old_rows) == 1, "Cross-hour historical record should not be deleted"
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/trends/all
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_clear_all_trends_returns_200(test_client: AsyncClient):
+    await test_client.post("/api/v1/collector/run")
+    resp = await test_client.delete("/api/v1/trends/all")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_clear_all_trends_response_schema(test_client: AsyncClient):
+    resp = await test_client.delete("/api/v1/trends/all")
+    data = resp.json()
+    assert "deleted" in data
+    assert isinstance(data["deleted"], int)
+
+
+@pytest.mark.asyncio
+async def test_clear_all_trends_removes_records(
+    test_client: AsyncClient, db_session: AsyncSession
+):
+    await test_client.post("/api/v1/collector/run")
+    count_before = (
+        await db_session.execute(select(func.count()).select_from(Trend))
+    ).scalar_one()
+    assert count_before > 0
+
+    resp = await test_client.delete("/api/v1/trends/all")
+    assert resp.json()["deleted"] == count_before
+
+    count_after = (
+        await db_session.execute(select(func.count()).select_from(Trend))
+    ).scalar_one()
+    assert count_after == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/system/config
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_system_config_returns_200(test_client: AsyncClient):
+    resp = await test_client.get("/api/v1/system/config")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_system_config_schema(test_client: AsyncClient):
+    data = (await test_client.get("/api/v1/system/config")).json()
+    assert "ai" in data
+    assert "provider" in data["ai"]
+    assert "configured" in data["ai"]
+    assert "email" in data
+    assert "configured" in data["email"]
+    assert "tiktok" in data
+    assert "configured" in data["tiktok"]
+    assert "scheduler" in data
+    assert "collect_cron" in data["scheduler"]

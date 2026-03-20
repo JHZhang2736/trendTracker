@@ -8,6 +8,7 @@ from app.routers import ai as ai_router
 from app.routers import alerts as alerts_router
 from app.routers import collector as collector_router
 from app.routers import scheduler as scheduler_router
+from app.routers import system as system_router
 from app.routers import trends as trends_router
 from app.services.scheduler import setup_scheduler
 
@@ -51,3 +52,4 @@ app.include_router(collector_router.router, prefix="/api/v1/collector", tags=["C
 app.include_router(trends_router.router, prefix="/api/v1/trends", tags=["Trends"])
 app.include_router(ai_router.router, prefix="/api/v1/ai", tags=["AI"])
 app.include_router(alerts_router.router, prefix="/api/v1/alerts", tags=["Alerts"])
+app.include_router(system_router.router, prefix="/api/v1/system", tags=["System"])
