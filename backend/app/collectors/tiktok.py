@@ -52,49 +52,35 @@ def _build_headers(cookie: str) -> dict[str, str]:
 
 
 class TikTokCollector(BaseCollector):
-    """Collect Top-20 trending hashtags from TikTok Creative Center.
+    """Collect trending hashtags from TikTok Creative Center (multiple regions).
+
+    Fetches from multiple countries and merges into a single list, deduplicated
+    by hashtag (keeps the entry with the highest view count).
 
     Requires ``TIKTOK_COOKIE`` in the environment.  Returns ``[]`` and logs a
     warning if the cookie is not configured or if the API rejects the request.
-
-    Args:
-        country_code: ISO 3166-1 alpha-2 country code, e.g. ``"US"``, ``"JP"``.
     """
 
     platform = "tiktok"
 
-    def __init__(self, country_code: str = "US") -> None:
-        self.country_code = country_code
+    DEFAULT_COUNTRIES = ("US", "GB", "JP", "BR", "ID", "TH")
 
-    async def collect(self) -> list[dict]:
-        """Fetch Top-20 trending hashtags from TikTok Creative Center API.
+    def __init__(self, countries: tuple[str, ...] | None = None) -> None:
+        self.countries = countries or self.DEFAULT_COUNTRIES
 
-        Returns:
-            List of trend dicts with standard BaseCollector fields, or ``[]``
-            when authentication is not configured or the API rejects the request.
-        """
-        cookie = settings.tiktok_cookie.strip()
-        if not cookie:
-            logger.warning(
-                "TikTokCollector: TIKTOK_COOKIE is not set — skipping collection. "
-                "Copy the Cookie header from an authenticated ads.tiktok.com browser "
-                "session and set it in your .env file."
-            )
-            return []
-
-        now = self._now()
-        url = _API_URL.format(country_code=self.country_code)
-        headers = _build_headers(cookie)
-
-        async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
+    async def _fetch_country(
+        self, client: httpx.AsyncClient, country_code: str, now: object
+    ) -> list[dict]:
+        """Fetch trending hashtags for a single country."""
+        url = _API_URL.format(country_code=country_code)
+        resp = await client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
 
         if data.get("code") != 0:
             logger.warning(
-                "TikTokCollector: API returned code=%s msg=%s — "
-                "cookie may be expired or invalid",
+                "TikTokCollector[%s]: API code=%s msg=%s",
+                country_code,
                 data.get("code"),
                 data.get("msg"),
             )
@@ -118,3 +104,48 @@ class TikTokCollector(BaseCollector):
                 }
             )
         return results
+
+    async def collect(self) -> list[dict]:
+        """Fetch trending hashtags from all configured countries and merge.
+
+        Deduplicates by hashtag — when the same tag appears in multiple
+        countries, the entry with the highest ``heat_score`` is kept.
+        Final list is sorted by heat descending and re-ranked 0..N-1.
+        """
+        import asyncio
+
+        cookie = settings.tiktok_cookie.strip()
+        if not cookie:
+            logger.warning(
+                "TikTokCollector: TIKTOK_COOKIE is not set — skipping collection. "
+                "Copy the Cookie header from an authenticated ads.tiktok.com browser "
+                "session and set it in your .env file."
+            )
+            return []
+
+        now = self._now()
+        headers = _build_headers(cookie)
+
+        async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:
+            country_results = await asyncio.gather(
+                *(self._fetch_country(client, cc, now) for cc in self.countries),
+                return_exceptions=True,
+            )
+
+        # Merge: deduplicate by hashtag, keep highest heat_score
+        best: dict[str, dict] = {}
+        for result in country_results:
+            if isinstance(result, Exception):
+                logger.error("TikTokCollector: region failed — %s", result)
+                continue
+            for item in result:
+                kw = item["keyword"]
+                if kw not in best or item["heat_score"] > best[kw]["heat_score"]:
+                    best[kw] = item
+
+        # Sort by heat descending and re-rank
+        merged = sorted(best.values(), key=lambda x: x["heat_score"], reverse=True)
+        for rank, item in enumerate(merged):
+            item["rank"] = rank
+
+        return merged

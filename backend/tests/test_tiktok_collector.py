@@ -176,9 +176,9 @@ async def test_collect_skips_empty_hashtag_name():
 
 
 @pytest.mark.asyncio
-async def test_collect_custom_country_code():
-    collector = TikTokCollector(country_code="JP")
-    captured = []
+async def test_collect_custom_countries():
+    collector = TikTokCollector(countries=("JP", "BR"))
+    captured: list[str] = []
 
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
@@ -198,7 +198,9 @@ async def test_collect_custom_country_code():
     ):
         await collector.collect()
 
-    assert "country_code=JP" in captured[0]
+    assert len(captured) == 2
+    assert any("country_code=JP" in u for u in captured)
+    assert any("country_code=BR" in u for u in captured)
 
 
 @pytest.mark.asyncio
