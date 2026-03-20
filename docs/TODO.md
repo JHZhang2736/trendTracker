@@ -1,6 +1,6 @@
 # TrendTracker — 待办事项
 
-> 最后更新：2026-03-20（#45 合并后）
+> 最后更新：2026-03-20（#49 合并后）
 
 ---
 
@@ -24,11 +24,9 @@
 
 ## 🟢 低优先级（技术债）
 
-- [ ] **`COLLECT_CRON` 环境变量无效** — `config.py` 有 `collect_cron` 字段，但 `scheduler.py` 硬编码 `IntervalTrigger(hours=1)`，该配置完全未被读取
-  - 修复：`setup_scheduler` 中读取 `settings.collect_cron` 解析为 `CronTrigger`，或改用 `IntervalTrigger` 读取间隔分钟数
+- [x] **`COLLECT_CRON` 环境变量无效** — 已用 `CronTrigger.from_crontab(settings.collect_cron)` 替换硬编码 `IntervalTrigger(hours=1)`（#48）
 
-- [ ] **趋势列表页重复平台标签** — `frontend/app/trends/page.tsx` 有本地 `PLATFORM_LABELS` 字典，与 `frontend/lib/platform-config.ts` 重复，新增平台要改两处
-  - 修复：改为 `import { getPlatformMeta } from "@/lib/platform-config"`
+- [x] **趋势列表页重复平台标签** — 已删除本地 `PLATFORM_LABELS`，改用 `getPlatformMeta`（#49）
 
 ---
 
