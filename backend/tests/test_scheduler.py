@@ -77,8 +77,28 @@ def test_get_jobs_status_record_schema():
 
 @pytest.mark.asyncio
 async def test_collect_trends_job_runs_without_error():
-    """The job should complete without raising even when the DB is unavailable."""
+    """Job should not raise even when the DB is unavailable (exception is caught)."""
     await collect_trends_job()
+
+
+@pytest.mark.asyncio
+async def test_collect_trends_job_calls_run_all_collectors():
+    """collect_trends_job must delegate to run_all_collectors (data is actually saved)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    mock_run = AsyncMock(return_value={"status": "ok", "records_count": 7})
+    mock_db = AsyncMock()
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.database.AsyncSessionLocal", return_value=mock_ctx),
+        patch("app.services.collector.run_all_collectors", mock_run),
+    ):
+        await collect_trends_job()
+
+    mock_run.assert_called_once_with(mock_db)
 
 
 # ---------------------------------------------------------------------------

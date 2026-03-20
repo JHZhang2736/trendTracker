@@ -52,22 +52,17 @@ async def daily_brief_job() -> None:
 
 
 async def collect_trends_job() -> None:
-    """Scheduled job: trigger all registered collectors and persist results.
-
-    In the MVP phase this logs a placeholder message.  Future implementation
-    will iterate :data:`~app.collectors.registry` and save to the database.
-    """
+    """Scheduled job: run all collectors and persist results to the database."""
     logger.info("collect_trends_job: starting trend collection run")
-    from app.collectors import registry
+    try:
+        from app.database import AsyncSessionLocal
+        from app.services.collector import run_all_collectors
 
-    for platform in registry.list_platforms():
-        try:
-            collector_cls = registry.get(platform)
-            collector = collector_cls()
-            results = await collector.collect()
-            logger.info("collect_trends_job: collected %d records from %s", len(results), platform)
-        except Exception as exc:  # noqa: BLE001
-            logger.error("collect_trends_job: error collecting from %s: %s", platform, exc)
+        async with AsyncSessionLocal() as db:
+            result = await run_all_collectors(db)
+        logger.info("collect_trends_job: done — %d records saved", result.get("records_count", 0))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("collect_trends_job: error — %s", exc)
 
 
 def setup_scheduler() -> AsyncIOScheduler:
