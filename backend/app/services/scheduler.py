@@ -77,7 +77,9 @@ def setup_scheduler() -> AsyncIOScheduler:
             name="Collect trends from all platforms",
             replace_existing=True,
         )
-        logger.info("setup_scheduler: registered 'collect_trends' job (cron=%s)", settings.collect_cron)
+        logger.info(
+            "setup_scheduler: registered 'collect_trends' job (cron=%s)", settings.collect_cron
+        )
 
     if scheduler.get_job("daily_brief") is None:
         scheduler.add_job(
