@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 _API_URL = (
     "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list"
-    "?period=7&page=1&limit=20&order_by=popular&country_code={country_code}"
+    "?period=7&page={page}&limit=50&order_by=popular&country_code={country_code}"
 )
 _BASE_HEADERS = {
     "User-Agent": (
@@ -71,38 +71,45 @@ class TikTokCollector(BaseCollector):
     async def _fetch_country(
         self, client: httpx.AsyncClient, country_code: str, now: object
     ) -> list[dict]:
-        """Fetch trending hashtags for a single country."""
-        url = _API_URL.format(country_code=country_code)
-        resp = await client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
-
-        if data.get("code") != 0:
-            logger.warning(
-                "TikTokCollector[%s]: API code=%s msg=%s",
-                country_code,
-                data.get("code"),
-                data.get("msg"),
-            )
-            return []
-
-        items = data.get("data", {}).get("list", [])
+        """Fetch trending hashtags for a single country (up to 2 pages)."""
         results = []
-        for rank, item in enumerate(items[:20]):
-            tag = item.get("hashtag_name", "").lstrip("#")
-            if not tag:
-                continue
-            heat = float(item.get("video_views") or item.get("publish_cnt") or 0)
-            results.append(
-                {
-                    "platform": self.platform,
-                    "keyword": f"#{tag}",
-                    "rank": rank,
-                    "heat_score": heat,
-                    "url": f"https://www.tiktok.com/tag/{tag}",
-                    "collected_at": now,
-                }
-            )
+        for page in (1, 2):
+            url = _API_URL.format(country_code=country_code, page=page)
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("code") != 0:
+                logger.warning(
+                    "TikTokCollector[%s p%s]: API code=%s msg=%s",
+                    country_code,
+                    page,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                break
+
+            items = data.get("data", {}).get("list", [])
+            if not items:
+                break
+
+            for item in items:
+                tag = item.get("hashtag_name", "").lstrip("#")
+                if not tag:
+                    continue
+                heat = float(item.get("video_views") or item.get("publish_cnt") or 0)
+                results.append(
+                    {
+                        "platform": self.platform,
+                        "keyword": f"#{tag}",
+                        "rank": len(results),
+                        "heat_score": heat,
+                        "url": f"https://www.tiktok.com/tag/{tag}",
+                        "collected_at": now,
+                    }
+                )
+
+        logger.info("TikTokCollector[%s]: fetched %d hashtags", country_code, len(results))
         return results
 
     async def collect(self) -> list[dict]:
