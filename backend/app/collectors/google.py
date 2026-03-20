@@ -40,34 +40,30 @@ def _parse_traffic(traffic_str: str) -> float:
 
 
 class GoogleTrendsCollector(BaseCollector):
-    """Collect Top-20 daily trending searches from Google Trends RSS feed.
+    """Collect daily trending searches from Google Trends RSS feed.
+
+    Fetches from multiple regions and merges into a single list, deduplicated
+    by keyword (keeps the entry with the highest traffic).
 
     Args:
-        geo: ISO 3166-1 alpha-2 country code, e.g. ``"US"``, ``"TW"``.
+        geos: Region codes (ISO 3166-1 alpha-2).  Defaults to US, TW, JP.
     """
 
     platform = "google"
 
-    def __init__(self, geo: str = "US") -> None:
-        self.geo = geo
+    # Default regions — configurable via constructor
+    DEFAULT_GEOS = ("US", "TW", "JP")
 
-    async def collect(self) -> list[dict]:
-        """Fetch Top-20 trending searches for *geo* from Google Trends RSS.
+    def __init__(self, geos: tuple[str, ...] | None = None) -> None:
+        self.geos = geos or self.DEFAULT_GEOS
 
-        Returns:
-            List of trend dicts with standard BaseCollector fields.
-        Raises:
-            httpx.HTTPError on network / HTTP failures.
-        """
-        now = self._now()
-        url = f"{_RSS_URL}?geo={self.geo}"
+    async def _fetch_geo(self, client: httpx.AsyncClient, geo: str, now: object) -> list[dict]:
+        """Fetch trending searches for a single region."""
+        url = f"{_RSS_URL}?geo={geo}"
+        resp = await client.get(url)
+        resp.raise_for_status()
 
-        async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            xml_text = resp.text
-
-        root = ET.fromstring(xml_text)
+        root = ET.fromstring(resp.text)
         items = root.findall(".//item")[:20]
 
         results = []
@@ -89,3 +85,37 @@ class GoogleTrendsCollector(BaseCollector):
                 }
             )
         return results
+
+    async def collect(self) -> list[dict]:
+        """Fetch trending searches from all configured regions and merge.
+
+        Deduplicates by keyword — when the same keyword appears in multiple
+        regions, the entry with the highest ``heat_score`` is kept.
+        Final list is sorted by heat descending and re-ranked 0..N-1.
+        """
+        import asyncio
+
+        now = self._now()
+
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+            geo_results = await asyncio.gather(
+                *(self._fetch_geo(client, geo, now) for geo in self.geos),
+                return_exceptions=True,
+            )
+
+        # Merge: deduplicate by keyword, keep highest heat_score
+        best: dict[str, dict] = {}
+        for result in geo_results:
+            if isinstance(result, Exception):
+                continue
+            for item in result:
+                kw = item["keyword"]
+                if kw not in best or item["heat_score"] > best[kw]["heat_score"]:
+                    best[kw] = item
+
+        # Sort by heat descending and re-rank
+        merged = sorted(best.values(), key=lambda x: x["heat_score"], reverse=True)
+        for rank, item in enumerate(merged):
+            item["rank"] = rank
+
+        return merged
