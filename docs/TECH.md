@@ -1,8 +1,8 @@
 # 技术文档
 # TrendTracker — 架构设计与实现说明
 
-**文档版本**: v0.2
-**最后更新**: 2026-03-19
+**文档版本**: v0.3
+**最后更新**: 2026-03-20
 
 ---
 
@@ -187,11 +187,14 @@ export const PLATFORM_CONFIG: Record<string, PlatformMeta> = {
 ### 5.3 数据流
 
 ```
-page.tsx
+page.tsx (仪表盘)
   └─ useEffect → api.trends.topByPlatform()
-       └─ lib/api.ts → fetch(NEXT_PUBLIC_API_URL + "/api/v1/trends/top-by-platform")
-            └─ FastAPI → get_top_trends_by_platform(db)
-                 └─ 各平台独立计算收敛评分，返回 {platform: {items: [...]}}
+       └─ /api/v1/trends/top-by-platform → 各平台 Top N 收敛评分
+
+trends/page.tsx (趋势列表)
+  └─ 每个平台独立 useEffect → api.trends.list(platform, 1, 50)
+       └─ /api/v1/trends?platform={slug}&page=1&page_size=50
+            └─ 每个平台一张卡片，固定 Top 50，卡片内滚动
 ```
 
 ---
@@ -201,9 +204,9 @@ page.tsx
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 健康检查 |
-| GET | `/api/v1/trends` | 分页趋势列表（含收敛评分） |
+| GET | `/api/v1/trends` | 分页趋势列表（支持 `platform` 过滤参数） |
 | GET | `/api/v1/trends/top` | 全局 Top N（按收敛评分，已废弃跨平台合并） |
-| GET | `/api/v1/trends/top-by-platform` | **各平台独立 Top N**（主要使用） |
+| GET | `/api/v1/trends/top-by-platform` | **各平台独立 Top N**（仪表盘使用） |
 | GET | `/api/v1/trends/platforms` | 已注册平台列表 |
 | POST | `/api/v1/collector/run` | 手动触发采集 |
 | POST | `/api/v1/ai/analyze` | AI 单词分析 |
@@ -220,7 +223,7 @@ page.tsx
 | 决策 | 选择 | 原因 |
 |------|------|------|
 | 评分是否跨平台合并 | ❌ 不合并，各平台独立评分 | 热度量纲差异太大；关键词格式不同无法匹配 |
-| 跨平台展示方式 | 分平台独立柱状图 | 保留各平台语义，用户可自行判断跨平台共振 |
+| 跨平台展示方式 | 分平台独立卡片（仪表盘柱状图 + 趋势列表卡片） | 不同平台语言不同、量纲不同，混合排行会造成语言混杂和量纲误导 |
 | 采集并发 | `asyncio.gather` | 从串行 O(n×t) 降为并行 O(max_t) |
 | 任务调度 | APScheduler 嵌入 FastAPI | MVP 任务量小，无需 Celery+Redis；代码解耦便于迁移 |
 | AI Provider | 工厂模式，`.env` 切换 | 国内模型迭代快，切换成本为零 |

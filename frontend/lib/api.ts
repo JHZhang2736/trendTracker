@@ -150,8 +150,11 @@ export const api = {
     config: () => request<SystemConfig>("/api/v1/system/config"),
   },
   trends: {
-    list: (page = 1, pageSize = 20) =>
-      request<TrendsListResponse>(`/api/v1/trends?page=${page}&page_size=${pageSize}`),
+    list: (page = 1, pageSize = 20, platform?: string) => {
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+      if (platform) params.set("platform", platform)
+      return request<TrendsListResponse>(`/api/v1/trends?${params}`)
+    },
     top: (limit = 20) => request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
     topByPlatform: (limit = 10) =>
       request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
