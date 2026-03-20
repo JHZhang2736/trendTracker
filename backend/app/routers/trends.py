@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.trend import Trend
 from app.schemas.trends import (
     HeatmapResponse,
     PlatformsResponse,
@@ -14,7 +15,6 @@ from app.schemas.trends import (
     TrendsClearResponse,
     TrendsListResponse,
 )
-from app.models.trend import Trend
 from app.services.trends import (
     get_heatmap,
     get_platforms,
