@@ -29,6 +29,12 @@ async def test_collector_run_response_schema(test_client: AsyncClient):
     assert "status" in data
     assert "records_count" in data
     assert isinstance(data["records_count"], int)
+    assert "platforms" in data
+    assert isinstance(data["platforms"], list)
+    for entry in data["platforms"]:
+        assert "platform" in entry
+        assert "count" in entry
+        assert "error" in entry
 
 
 @pytest.mark.asyncio

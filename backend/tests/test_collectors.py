@@ -156,3 +156,70 @@ async def test_weibo_mock_collector_rank_order():
     results = await collector.collect()
     ranks = [r["rank"] for r in results if r["rank"] is not None]
     assert ranks == sorted(ranks), "Ranks should be in ascending order"
+
+
+# ---------------------------------------------------------------------------
+# _collect_one — error handling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_collect_one_returns_error_on_failure():
+    """_collect_one must return (slug, [], error_str) when the collector raises."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.collector import _collect_one
+
+    with patch(
+        "app.collectors.registry.registry.get",
+        return_value=type(
+            "FailCollector",
+            (),
+            {
+                "__init__": lambda self: None,
+                "collect": AsyncMock(side_effect=RuntimeError("network unreachable")),
+            },
+        ),
+    ):
+        slug, records, error = await _collect_one("google")
+
+    assert slug == "google"
+    assert records == []
+    assert error is not None
+    assert "network unreachable" in error
+
+
+@pytest.mark.asyncio
+async def test_collect_one_returns_none_error_on_success():
+    """_collect_one must return (slug, records, None) when the collector succeeds."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.collector import _collect_one
+
+    fake_records = [
+        {
+            "platform": "google",
+            "keyword": "test",
+            "rank": 0,
+            "heat_score": 1000.0,
+            "url": "",
+            "collected_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).replace(tzinfo=None),
+        }
+    ]
+
+    with patch(
+        "app.collectors.registry.registry.get",
+        return_value=type(
+            "OkCollector",
+            (),
+            {
+                "__init__": lambda self: None,
+                "collect": AsyncMock(return_value=fake_records),
+            },
+        ),
+    ):
+        slug, records, error = await _collect_one("google")
+
+    assert slug == "google"
+    assert len(records) == 1
+    assert error is None
