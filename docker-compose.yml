@@ -1,6 +1,7 @@
 services:
   mysql:
     image: mysql:8.0
+    pull_policy: if_not_present
     container_name: trendtracker-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -20,6 +21,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      pull_policy: if_not_present
     container_name: trendtracker-backend
     ports:
       - "8000:8000"
@@ -36,6 +38,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      pull_policy: if_not_present
     container_name: trendtracker-frontend
     ports:
       - "3000:3000"
