@@ -71,9 +71,15 @@ def _to_naive_utc(dt: datetime) -> datetime:
 # ---------------------------------------------------------------------------
 
 
-async def get_trends(db: AsyncSession, page: int = 1, page_size: int = 20) -> dict:
-    """Return paginated trends sorted by convergence_score (cross-platform normalised).
+async def get_trends(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 20,
+    platform: str | None = None,
+) -> dict:
+    """Return paginated trends sorted by convergence_score (per-platform normalised).
 
+    When *platform* is provided, only records from that platform are returned.
     Uses a CTE to compute per-platform max heat_score within the last 24 hours so that
     heat normalisation is scoped to the same window as the displayed data — preventing
     stale all-time maximums from deflating scores.  Sorting and pagination are performed
@@ -84,25 +90,27 @@ async def get_trends(db: AsyncSession, page: int = 1, page_size: int = 20) -> di
     since = now - timedelta(hours=24)
     offset = (page - 1) * page_size
 
+    base_filter = Trend.collected_at >= since
+    if platform:
+        base_filter = base_filter & (Trend.platform == platform)
+
     # CTE: per-platform max heat_score scoped to the last 24 h window.
-    # Scoping here matters: an all-time max from days ago would shrink current scores
-    # and distort cross-platform comparison.
     platform_max_cte = (
         select(
             Trend.platform.label("platform"),
             func.max(Trend.heat_score).label("max_heat"),
         )
-        .where(Trend.collected_at >= since)
+        .where(base_filter)
         .group_by(Trend.platform)
         .cte("platform_max")
     )
 
-    # Fetch all 24 h records with their platform's max_heat attached via the CTE.
+    # Fetch all matching records with their platform's max_heat attached via the CTE.
     rows = (
         await db.execute(
             select(Trend, platform_max_cte.c.max_heat)
             .join(platform_max_cte, Trend.platform == platform_max_cte.c.platform)
-            .where(Trend.collected_at >= since)
+            .where(base_filter)
         )
     ).all()
 
