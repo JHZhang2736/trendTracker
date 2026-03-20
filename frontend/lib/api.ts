@@ -67,6 +67,37 @@ export interface HeatmapResponse {
   max_heat: number
 }
 
+export interface AnalyzeResult {
+  id: number
+  keyword: string
+  business_insight: string
+  sentiment: "positive" | "negative" | "neutral"
+  related_keywords: string[]
+  model: string | null
+  created_at: string
+}
+
+export interface BriefResponse {
+  id: number
+  date: string
+  content: string
+  model: string | null
+  created_at: string
+}
+
+export interface AlertRule {
+  id: number
+  keyword: string
+  threshold: number
+  notify_email: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface AlertRulesResponse {
+  items: AlertRule[]
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
@@ -79,5 +110,23 @@ export const api = {
       request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
     topByPlatform: (limit = 10) =>
       request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
+  },
+  ai: {
+    analyze: (keyword: string) =>
+      request<AnalyzeResult>("/api/v1/ai/analyze", {
+        method: "POST",
+        body: JSON.stringify({ keyword }),
+      }),
+    latestBrief: () => request<BriefResponse>("/api/v1/ai/brief/latest"),
+    generateBrief: () =>
+      request<BriefResponse>("/api/v1/ai/brief", { method: "POST" }),
+  },
+  alerts: {
+    listRules: () => request<AlertRulesResponse>("/api/v1/alerts/keywords"),
+    createRule: (keyword: string, threshold: number, notify_email: string) =>
+      request<AlertRule>("/api/v1/alerts/keywords", {
+        method: "POST",
+        body: JSON.stringify({ keyword, threshold, notify_email }),
+      }),
   },
 }
