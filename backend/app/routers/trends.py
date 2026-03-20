@@ -6,11 +6,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.trend import Trend
 from app.schemas.trends import (
     HeatmapResponse,
     PlatformsResponse,
     TopByPlatformResponse,
     TopTrendsResponse,
+    TrendsClearResponse,
     TrendsListResponse,
 )
 from app.services.trends import (
@@ -70,3 +72,13 @@ async def trends_heatmap(db: AsyncSession = Depends(get_db)) -> HeatmapResponse:
 async def list_platforms() -> PlatformsResponse:
     """Return all registered platform slugs."""
     return PlatformsResponse(platforms=get_platforms())
+
+
+@router.delete("/all", summary="清空所有趋势数据", response_model=TrendsClearResponse)
+async def clear_all_trends(db: AsyncSession = Depends(get_db)) -> TrendsClearResponse:
+    """Delete every trend record from the database. This action is irreversible."""
+    from sqlalchemy import delete as sql_delete
+
+    result = await db.execute(sql_delete(Trend))
+    await db.commit()
+    return TrendsClearResponse(deleted=result.rowcount)

@@ -1,14 +1,13 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from app.config import settings
-from app.database import Base
 
 # Load all models so Alembic can detect them
 import app.models  # noqa: F401
+from alembic import context
+from app.config import settings
+from app.database import Base
 
 config = context.config
 if config.config_file_name is not None:

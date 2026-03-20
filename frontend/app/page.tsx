@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BarChart3, Brain, Bell, Database } from "lucide-react"
 import { api, type HealthStatus, type PlatformTrendItem, type BriefResponse } from "@/lib/api"
@@ -189,39 +189,6 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Platform Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">数据源状态</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {trendsLoading ? (
-            <div className="flex gap-2">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-6 w-24 rounded-full" />)}
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {(["weibo", "google", "tiktok"] as const).map((slug) => {
-                const meta = getPlatformMeta(slug)
-                const active = activePlatforms.includes(slug)
-                return (
-                  <Badge
-                    key={slug}
-                    variant={active ? "default" : "secondary"}
-                    className={active ? "bg-green-500 hover:bg-green-500" : ""}
-                  >
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full mr-1.5"
-                      style={{ backgroundColor: active ? "white" : meta.color, opacity: active ? 0.8 : 0.5 }}
-                    />
-                    {meta.displayName} · {active ? "有数据" : "无近期数据"}
-                  </Badge>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

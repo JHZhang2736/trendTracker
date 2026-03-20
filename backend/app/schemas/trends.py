@@ -58,3 +58,7 @@ class HeatmapResponse(BaseModel):
     time_slots: list[str]
     data: list[list[float]]
     max_heat: float
+
+
+class TrendsClearResponse(BaseModel):
+    deleted: int
