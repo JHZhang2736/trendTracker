@@ -62,9 +62,7 @@ async def run_all_collectors(db: AsyncSession) -> dict:
     total_records = 0
     platform_results = []
     for platform_slug, records, error in results:
-        platform_results.append(
-            {"platform": platform_slug, "count": len(records), "error": error}
-        )
+        platform_results.append({"platform": platform_slug, "count": len(records), "error": error})
         if not records:
             continue
 
