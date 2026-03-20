@@ -7,12 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, TrendItem } from "@/lib/api"
-
-const PLATFORM_LABELS: Record<string, string> = {
-  weibo: "微博",
-  google: "Google",
-  tiktok: "TikTok",
-}
+import { getPlatformMeta } from "@/lib/platform-config"
 
 function formatHeat(score: number | null): string {
   if (score === null) return "—"
@@ -53,7 +48,7 @@ function TrendRow({ item, index }: { item: TrendItem; index: number }) {
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <Badge variant="secondary" className="text-xs py-0 h-4">
-            {PLATFORM_LABELS[item.platform] ?? item.platform}
+            {getPlatformMeta(item.platform).displayName}
           </Badge>
           <span className="text-xs text-muted-foreground">{formatTime(item.collected_at)}</span>
         </div>
