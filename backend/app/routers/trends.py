@@ -30,7 +30,9 @@ router = APIRouter()
 async def list_trends(
     page: int = Query(default=1, ge=1, description="页码，从 1 开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
-    platform: str | None = Query(default=None, description="按平台过滤，如 weibo / google / tiktok"),  # noqa: E501
+    platform: str | None = Query(
+        default=None, description="按平台过滤，如 weibo / google / tiktok"
+    ),  # noqa: E501
     db: AsyncSession = Depends(get_db),
 ) -> TrendsListResponse:
     """Return a paginated list of trend records with convergence_score.
