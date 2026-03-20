@@ -7,7 +7,6 @@ from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +67,17 @@ async def collect_trends_job() -> None:
 def setup_scheduler() -> AsyncIOScheduler:
     """Register all recurring jobs and return the scheduler (not yet started)."""
     if scheduler.get_job("collect_trends") is None:
+        from app.config import settings
+
+        collect_trigger = CronTrigger.from_crontab(settings.collect_cron)
         scheduler.add_job(
             collect_trends_job,
-            trigger=IntervalTrigger(hours=1),
+            trigger=collect_trigger,
             id="collect_trends",
             name="Collect trends from all platforms",
             replace_existing=True,
         )
-        logger.info("setup_scheduler: registered 'collect_trends' job (every 1 hour)")
+        logger.info("setup_scheduler: registered 'collect_trends' job (cron=%s)", settings.collect_cron)
 
     if scheduler.get_job("daily_brief") is None:
         scheduler.add_job(

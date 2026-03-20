@@ -34,12 +34,31 @@ def test_setup_scheduler_idempotent():
     assert job_ids.count("collect_trends") == 1
 
 
-def test_setup_scheduler_job_trigger_is_interval():
-    from apscheduler.triggers.interval import IntervalTrigger
+def test_setup_scheduler_job_trigger_is_cron():
+    from apscheduler.triggers.cron import CronTrigger
 
     sched = setup_scheduler()
     job = sched.get_job("collect_trends")
-    assert isinstance(job.trigger, IntervalTrigger)
+    assert isinstance(job.trigger, CronTrigger)
+
+
+def test_setup_scheduler_collect_cron_is_configurable():
+    """COLLECT_CRON env var must be respected — custom cron expression is parsed."""
+    from unittest.mock import patch
+
+    from apscheduler.triggers.cron import CronTrigger
+
+    from app.services import scheduler as sched_module
+
+    # Reset so setup_scheduler re-registers the job with a fresh trigger
+    sched_module.scheduler.remove_all_jobs()
+
+    with patch("app.config.settings.collect_cron", "0 */2 * * *"):
+        sched = sched_module.setup_scheduler()
+
+    job = sched.get_job("collect_trends")
+    assert isinstance(job.trigger, CronTrigger)
+    assert "*/2" in str(job.trigger)
 
 
 # ---------------------------------------------------------------------------
