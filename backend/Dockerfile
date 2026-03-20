@@ -9,11 +9,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy all source code first (needed for editable install)
-COPY . .
+# Copy only dependency manifest first — this layer is cached until pyproject.toml changes
+COPY pyproject.toml .
+# Create a minimal stub so setuptools can resolve the package metadata without full source
+RUN mkdir -p app && touch app/__init__.py
 
-# Install Python dependencies (editable, with dev extras)
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -e ".[dev]"
+# Install Python dependencies — cached as long as pyproject.toml doesn't change
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple ".[dev]"
+
+# Now copy the real source code — changes here do NOT invalidate the pip cache layer above
+COPY . .
 
 EXPOSE 8000
 
