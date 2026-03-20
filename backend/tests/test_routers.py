@@ -106,6 +106,47 @@ async def test_trends_list_page_out_of_range(test_client: AsyncClient):
     assert data["items"] == []
 
 
+@pytest.mark.asyncio
+async def test_trends_list_sorted_by_convergence_score(test_client: AsyncClient):
+    """Items must be returned in descending convergence_score order."""
+    await test_client.post("/api/v1/collector/run")
+    items = (await test_client.get("/api/v1/trends?page_size=100")).json()["items"]
+    assert len(items) > 1
+    scores = [item["convergence_score"] for item in items]
+    assert scores == sorted(scores, reverse=True), "Items not sorted by convergence_score desc"
+
+
+@pytest.mark.asyncio
+async def test_trends_list_total_reflects_24h_window(
+    test_client: AsyncClient, db_session: AsyncSession
+):
+    """total must count only records within the last 24 hours."""
+    from datetime import timedelta
+
+    from sqlalchemy import insert
+
+    from app.models.trend import Trend
+
+    # Insert one old record (outside 24h window)
+    old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
+    await db_session.execute(
+        insert(Trend).values(
+            platform="weibo",
+            keyword="old_keyword",
+            rank=0,
+            heat_score=1000.0,
+            url="",
+            collected_at=old_time,
+        )
+    )
+    await db_session.commit()
+
+    await test_client.post("/api/v1/collector/run")
+    data = (await test_client.get("/api/v1/trends")).json()
+    # The old record must not be counted
+    assert all(item["keyword"] != "old_keyword" for item in data["items"])
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/trends/platforms
 # ---------------------------------------------------------------------------

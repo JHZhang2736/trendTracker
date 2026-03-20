@@ -72,50 +72,69 @@ def _to_naive_utc(dt: datetime) -> datetime:
 
 
 async def get_trends(db: AsyncSession, page: int = 1, page_size: int = 20) -> dict:
-    """Return paginated trends with convergence_score, ordered by collected_at desc."""
-    offset = (page - 1) * page_size
+    """Return paginated trends sorted by convergence_score (cross-platform normalised).
+
+    Uses a CTE to compute per-platform max heat_score within the last 24 hours so that
+    heat normalisation is scoped to the same window as the displayed data — preventing
+    stale all-time maximums from deflating scores.  Sorting and pagination are performed
+    in Python because the recency-decay formula uses datetime arithmetic that is not
+    portable across MySQL (production) and SQLite (tests).
+    """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    since = now - timedelta(hours=24)
+    offset = (page - 1) * page_size
 
-    count_result = await db.execute(select(func.count()).select_from(Trend))
-    total = count_result.scalar_one()
-
-    # Per-platform max heat for normalization (avoids cross-platform magnitude bias)
-    max_heat_rows = await db.execute(
-        select(Trend.platform, func.max(Trend.heat_score)).group_by(Trend.platform)
+    # CTE: per-platform max heat_score scoped to the last 24 h window.
+    # Scoping here matters: an all-time max from days ago would shrink current scores
+    # and distort cross-platform comparison.
+    platform_max_cte = (
+        select(
+            Trend.platform.label("platform"),
+            func.max(Trend.heat_score).label("max_heat"),
+        )
+        .where(Trend.collected_at >= since)
+        .group_by(Trend.platform)
+        .cte("platform_max")
     )
-    platform_max_heat: dict[str, float] = {
-        row.platform: float(row[1] or 0.0) for row in max_heat_rows
-    }
 
-    result = await db.execute(
-        select(Trend)
-        .order_by(Trend.collected_at.desc(), Trend.rank)
-        .offset(offset)
-        .limit(page_size)
-    )
-    trends = result.scalars().all()
+    # Fetch all 24 h records with their platform's max_heat attached via the CTE.
+    rows = (
+        await db.execute(
+            select(Trend, platform_max_cte.c.max_heat)
+            .join(platform_max_cte, Trend.platform == platform_max_cte.c.platform)
+            .where(Trend.collected_at >= since)
+        )
+    ).all()
 
-    items = []
-    for t in trends:
-        collected = _to_naive_utc(t.collected_at)
-        age_hours = max(0.0, (now - collected).total_seconds() / 3600)
+    # Score every record in Python (portable datetime arithmetic for recency decay).
+    scored: list[tuple[Trend, float]] = []
+    for t, max_heat in rows:
+        age_hours = max(0.0, (now - _to_naive_utc(t.collected_at)).total_seconds() / 3600)
         score = compute_convergence_score(
             heat_score=t.heat_score,
             rank=t.rank,
             age_hours=age_hours,
-            platform_max_heat=platform_max_heat.get(t.platform, 0.0),
+            platform_max_heat=float(max_heat or 0.0),
         )
-        items.append(
-            {
-                "platform": t.platform,
-                "keyword": t.keyword,
-                "rank": t.rank,
-                "heat_score": t.heat_score,
-                "url": t.url,
-                "collected_at": t.collected_at,
-                "convergence_score": score,
-            }
-        )
+        scored.append((t, score))
+
+    # Sort by convergence_score descending, then paginate in Python.
+    scored.sort(key=lambda x: x[1], reverse=True)
+    total = len(scored)
+    page_slice = scored[offset : offset + page_size]
+
+    items = [
+        {
+            "platform": t.platform,
+            "keyword": t.keyword,
+            "rank": t.rank,
+            "heat_score": t.heat_score,
+            "url": t.url,
+            "collected_at": t.collected_at,
+            "convergence_score": score,
+        }
+        for t, score in page_slice
+    ]
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 
 
