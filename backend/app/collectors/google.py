@@ -52,7 +52,7 @@ class GoogleTrendsCollector(BaseCollector):
     platform = "google"
 
     # Default regions — configurable via constructor
-    DEFAULT_GEOS = ("US", "TW", "JP")
+    DEFAULT_GEOS = ("US", "IN", "JP", "KR", "IL", "SG")
 
     def __init__(self, geos: tuple[str, ...] | None = None) -> None:
         self.geos = geos or self.DEFAULT_GEOS
