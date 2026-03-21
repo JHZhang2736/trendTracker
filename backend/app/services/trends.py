@@ -12,6 +12,17 @@ from app.collectors.registry import registry
 from app.models.trend import Trend
 
 # ---------------------------------------------------------------------------
+# Simple counts
+# ---------------------------------------------------------------------------
+
+
+async def get_total_count(db: AsyncSession) -> int:
+    """Return the total number of trend records in the database (all-time)."""
+    result = await db.execute(select(func.count()).select_from(Trend))
+    return result.scalar() or 0
+
+
+# ---------------------------------------------------------------------------
 # Convergence score — pure function, no I/O
 # ---------------------------------------------------------------------------
 

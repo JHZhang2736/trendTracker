@@ -2,6 +2,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     ...init,
   })
@@ -120,6 +121,10 @@ export interface TrendsClearResponse {
   deleted: number
 }
 
+export interface TrendsCountResponse {
+  total: number
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
@@ -158,6 +163,7 @@ export const api = {
     top: (limit = 20) => request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
     topByPlatform: (limit = 10) =>
       request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
+    count: () => request<TrendsCountResponse>("/api/v1/trends/count"),
     clearAll: () => request<TrendsClearResponse>("/api/v1/trends/all", { method: "DELETE" }),
   },
 }

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 _API_URL = (
     "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list"
-    "?period=7&page=1&limit=20&order_by=popular&country_code={country_code}"
+    "?period=7&page={page}&limit=50&order_by=popular&country_code={country_code}"
 )
 _BASE_HEADERS = {
     "User-Agent": (
@@ -52,27 +52,75 @@ def _build_headers(cookie: str) -> dict[str, str]:
 
 
 class TikTokCollector(BaseCollector):
-    """Collect Top-20 trending hashtags from TikTok Creative Center.
+    """Collect trending hashtags from TikTok Creative Center (multiple regions).
+
+    Fetches from multiple countries and merges into a single list, deduplicated
+    by hashtag (keeps the entry with the highest view count).
 
     Requires ``TIKTOK_COOKIE`` in the environment.  Returns ``[]`` and logs a
     warning if the cookie is not configured or if the API rejects the request.
-
-    Args:
-        country_code: ISO 3166-1 alpha-2 country code, e.g. ``"US"``, ``"JP"``.
     """
 
     platform = "tiktok"
 
-    def __init__(self, country_code: str = "US") -> None:
-        self.country_code = country_code
+    DEFAULT_COUNTRIES = ("US", "GB", "JP", "BR", "ID", "TH")
+
+    def __init__(self, countries: tuple[str, ...] | None = None) -> None:
+        self.countries = countries or self.DEFAULT_COUNTRIES
+
+    async def _fetch_country(
+        self, client: httpx.AsyncClient, country_code: str, now: object
+    ) -> list[dict]:
+        """Fetch trending hashtags for a single country (up to 2 pages)."""
+        results = []
+        for page in (1, 2):
+            url = _API_URL.format(country_code=country_code, page=page)
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("code") != 0:
+                logger.warning(
+                    "TikTokCollector[%s p%s]: API code=%s msg=%s",
+                    country_code,
+                    page,
+                    data.get("code"),
+                    data.get("msg"),
+                )
+                break
+
+            items = data.get("data", {}).get("list", [])
+            if not items:
+                break
+
+            for item in items:
+                tag = item.get("hashtag_name", "").lstrip("#")
+                if not tag:
+                    continue
+                heat = float(item.get("video_views") or item.get("publish_cnt") or 0)
+                results.append(
+                    {
+                        "platform": self.platform,
+                        "keyword": f"#{tag}",
+                        "rank": len(results),
+                        "heat_score": heat,
+                        "url": f"https://www.tiktok.com/tag/{tag}",
+                        "collected_at": now,
+                    }
+                )
+
+        logger.info("TikTokCollector[%s]: fetched %d hashtags", country_code, len(results))
+        return results
 
     async def collect(self) -> list[dict]:
-        """Fetch Top-20 trending hashtags from TikTok Creative Center API.
+        """Fetch trending hashtags from all configured countries and merge.
 
-        Returns:
-            List of trend dicts with standard BaseCollector fields, or ``[]``
-            when authentication is not configured or the API rejects the request.
+        Deduplicates by hashtag — when the same tag appears in multiple
+        countries, the entry with the highest ``heat_score`` is kept.
+        Final list is sorted by heat descending and re-ranked 0..N-1.
         """
+        import asyncio
+
         cookie = settings.tiktok_cookie.strip()
         if not cookie:
             logger.warning(
@@ -83,38 +131,28 @@ class TikTokCollector(BaseCollector):
             return []
 
         now = self._now()
-        url = _API_URL.format(country_code=self.country_code)
         headers = _build_headers(cookie)
 
         async with httpx.AsyncClient(headers=headers, timeout=15.0) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
-
-        if data.get("code") != 0:
-            logger.warning(
-                "TikTokCollector: API returned code=%s msg=%s — "
-                "cookie may be expired or invalid",
-                data.get("code"),
-                data.get("msg"),
+            country_results = await asyncio.gather(
+                *(self._fetch_country(client, cc, now) for cc in self.countries),
+                return_exceptions=True,
             )
-            return []
 
-        items = data.get("data", {}).get("list", [])
-        results = []
-        for rank, item in enumerate(items[:20]):
-            tag = item.get("hashtag_name", "").lstrip("#")
-            if not tag:
+        # Merge: deduplicate by hashtag, keep highest heat_score
+        best: dict[str, dict] = {}
+        for result in country_results:
+            if isinstance(result, Exception):
+                logger.error("TikTokCollector: region failed — %s", result)
                 continue
-            heat = float(item.get("video_views") or item.get("publish_cnt") or 0)
-            results.append(
-                {
-                    "platform": self.platform,
-                    "keyword": f"#{tag}",
-                    "rank": rank,
-                    "heat_score": heat,
-                    "url": f"https://www.tiktok.com/tag/{tag}",
-                    "collected_at": now,
-                }
-            )
-        return results
+            for item in result:
+                kw = item["keyword"]
+                if kw not in best or item["heat_score"] > best[kw]["heat_score"]:
+                    best[kw] = item
+
+        # Sort by heat descending and re-rank
+        merged = sorted(best.values(), key=lambda x: x["heat_score"], reverse=True)
+        for rank, item in enumerate(merged):
+            item["rank"] = rank
+
+        return merged

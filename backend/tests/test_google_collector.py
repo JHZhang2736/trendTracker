@@ -164,9 +164,9 @@ async def test_collect_truncates_at_20():
 
 
 @pytest.mark.asyncio
-async def test_collect_custom_geo():
-    collector = GoogleTrendsCollector(geo="TW")
-    captured_url = []
+async def test_collect_custom_geos():
+    collector = GoogleTrendsCollector(geos=("TW", "JP"))
+    captured_urls: list[str] = []
 
     mock_resp = _make_mock_response()
     mock_client = AsyncMock()
@@ -174,14 +174,16 @@ async def test_collect_custom_geo():
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
     async def fake_get(url, **kwargs):
-        captured_url.append(url)
+        captured_urls.append(url)
         return mock_resp
 
     mock_client.get = fake_get
     with patch("httpx.AsyncClient", return_value=mock_client):
         await collector.collect()
 
-    assert "geo=TW" in captured_url[0]
+    assert len(captured_urls) == 2
+    assert any("geo=TW" in u for u in captured_urls)
+    assert any("geo=JP" in u for u in captured_urls)
 
 
 # ---------------------------------------------------------------------------

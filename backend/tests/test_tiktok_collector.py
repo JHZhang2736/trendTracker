@@ -138,15 +138,16 @@ async def test_collect_collected_at_is_datetime():
 
 
 @pytest.mark.asyncio
-async def test_collect_truncates_at_20():
+async def test_collect_paginates_and_deduplicates():
     big_list = [
-        {"hashtag_name": f"tag{i}", "video_views": 1_000_000, "publish_cnt": 100}
+        {"hashtag_name": f"tag{i}", "video_views": 1_000_000 - i, "publish_cnt": 100}
         for i in range(25)
     ]
     body = {"code": 0, "msg": "OK", "data": {"list": big_list}}
     with _patch_httpx(body):
         results = await TikTokCollector().collect()
-    assert len(results) <= 20
+    # Mock returns same 25 tags for every region/page; after dedup = 25 unique
+    assert len(results) == 25
 
 
 @pytest.mark.asyncio
@@ -176,9 +177,9 @@ async def test_collect_skips_empty_hashtag_name():
 
 
 @pytest.mark.asyncio
-async def test_collect_custom_country_code():
-    collector = TikTokCollector(country_code="JP")
-    captured = []
+async def test_collect_custom_countries():
+    collector = TikTokCollector(countries=("JP", "BR"))
+    captured: list[str] = []
 
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
@@ -198,7 +199,10 @@ async def test_collect_custom_country_code():
     ):
         await collector.collect()
 
-    assert "country_code=JP" in captured[0]
+    # 2 countries × 2 pages = 4 requests
+    assert len(captured) == 4
+    assert any("country_code=JP" in u for u in captured)
+    assert any("country_code=BR" in u for u in captured)
 
 
 @pytest.mark.asyncio

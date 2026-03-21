@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { TrendingUp, ExternalLink, Flame } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { TrendingUp, ExternalLink, Flame, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type TrendItem } from "@/lib/api"
@@ -25,7 +26,7 @@ function formatTime(iso: string): string {
 }
 
 function TrendRow({ item, index }: { item: TrendItem; index: number }) {
-  const rankDisplay = item.rank !== null ? item.rank + 1 : index + 1
+  const rankDisplay = index + 1
   const isHot = rankDisplay <= 3
 
   return (
@@ -86,18 +87,20 @@ function TrendRowSkeleton() {
   )
 }
 
-function PlatformCard({ slug }: { slug: string }) {
+function PlatformCard({ slug, refreshKey }: { slug: string; refreshKey: number }) {
   const [items, setItems] = useState<TrendItem[]>([])
   const [loading, setLoading] = useState(true)
   const meta = getPlatformMeta(slug)
 
   useEffect(() => {
+    let cancelled = false
     api.trends
       .list(1, 50, slug)
-      .then((res) => setItems(res.items))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }, [slug])
+      .then((res) => { if (!cancelled) setItems(res.items) })
+      .catch(() => { if (!cancelled) setItems([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true; setLoading(true) }
+  }, [slug, refreshKey])
 
   return (
     <Card className="flex flex-col">
@@ -138,19 +141,44 @@ function PlatformCard({ slug }: { slug: string }) {
 const PLATFORMS = Object.keys(PLATFORM_CONFIG)
 
 export default function TrendsPage() {
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await api.post("/api/v1/collector/run", {})
+      setRefreshKey((k) => k + 1)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <TrendingUp className="w-6 h-6" />
-          趋势列表
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">近24小时各平台热词 Top 50</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <TrendingUp className="w-6 h-6" />
+            趋势列表
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">近24小时各平台热词 Top 50</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+          立即采集
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {PLATFORMS.map((slug) => (
-          <PlatformCard key={slug} slug={slug} />
+          <PlatformCard key={slug} slug={slug} refreshKey={refreshKey} />
         ))}
       </div>
     </div>

@@ -62,3 +62,7 @@ class HeatmapResponse(BaseModel):
 
 class TrendsClearResponse(BaseModel):
     deleted: int
+
+
+class TrendsCountResponse(BaseModel):
+    total: int
