@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "fastapi": {
+      "source": "srbhr/Resume-Matcher",
+      "sourceType": "github",
+      "computedHash": "7adba845bf57718e981e16e3e2e92ea41b935b520530df42ed72ac33dabf158a"
+    },
+    "tailwind-patterns": {
+      "source": "srbhr/Resume-Matcher",
+      "sourceType": "github",
+      "computedHash": "b4accf2d31580daa632383b31b33bad751380ef7f7ffac6440ec1ce7e2edebdb"
+    }
+  }
+}
