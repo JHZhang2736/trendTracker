@@ -13,6 +13,7 @@ from app.schemas.trends import (
     TopByPlatformResponse,
     TopTrendsResponse,
     TrendsClearResponse,
+    TrendsCountResponse,
     TrendsListResponse,
 )
 from app.services.trends import (
@@ -20,6 +21,7 @@ from app.services.trends import (
     get_platforms,
     get_top_trends,
     get_top_trends_by_platform,
+    get_total_count,
     get_trends,
 )
 
@@ -72,6 +74,13 @@ async def trends_heatmap(db: AsyncSession = Depends(get_db)) -> HeatmapResponse:
     """Return heatmap data grouped by platform × hour for the last 24 hours."""
     data = await get_heatmap(db=db)
     return HeatmapResponse(**data)
+
+
+@router.get("/count", summary="获取趋势记录总数（全量）", response_model=TrendsCountResponse)
+async def trends_count(db: AsyncSession = Depends(get_db)) -> TrendsCountResponse:
+    """Return the total number of trend records in the database (all-time)."""
+    total = await get_total_count(db=db)
+    return TrendsCountResponse(total=total)
 
 
 @router.get("/platforms", summary="获取已注册平台列表", response_model=PlatformsResponse)

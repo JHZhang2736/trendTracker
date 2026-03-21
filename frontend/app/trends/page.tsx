@@ -93,12 +93,13 @@ function PlatformCard({ slug, refreshKey }: { slug: string; refreshKey: number }
   const meta = getPlatformMeta(slug)
 
   useEffect(() => {
-    setLoading(true)
+    let cancelled = false
     api.trends
       .list(1, 50, slug)
-      .then((res) => setItems(res.items))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
+      .then((res) => { if (!cancelled) setItems(res.items) })
+      .catch(() => { if (!cancelled) setItems([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true; setLoading(true) }
   }, [slug, refreshKey])
 
   return (
