@@ -101,7 +101,7 @@ export function TopKeywordsChart({ items, color }: Props) {
       observer.disconnect()
       chart?.dispose()
     }
-  }, [items])
+  }, [items, color])
 
   return <div ref={containerRef} style={{ width: "100%", height: Math.max(240, items.length * 28) }} />
 }
