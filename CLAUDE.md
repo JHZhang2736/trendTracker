@@ -1,6 +1,5 @@
 ## 注意事项
-将我所有跟你对话的历史记录记录在docs内的一个文件中，我的提问必须记录，你的回复可以省略或者简写
-
+- 将我所有跟你对话的历史记录记录在docs内的一个文件中，我的提问必须记录，你的回复可以省略或者简写
 - `cd` 命令永远不要与 git 命令组合使用（不要写 `cd xxx && git ...`），git 命令始终使用 `-C <path>` 指定目录
 
 ---
@@ -75,6 +74,6 @@
 
 ### 自动化文档
 - API 文档：FastAPI 内置 Swagger `localhost:8000/docs`，所有 Router 函数必须写 `summary`
-- Changelog：`git-cliff` 从 Conventional Commits 自动生成
+- 每次提交后更新 Changelog：`git-cliff` 从 Conventional Commits 自动生成
 
 详细内容见 `docs/DEV_WORKFLOW.md`
