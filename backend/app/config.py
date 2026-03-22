@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     search_provider: str = "duckduckgo"
 
     # Deep analysis
-    deep_analysis_auto_limit: int = 3  # auto-analyze top N after collection
+    deep_analysis_auto_ratio: float = 0.3  # analyze top 30% of relevant keywords
+    deep_analysis_auto_max: int = 10  # hard cap per collection run
     deep_analysis_cooldown_hours: int = 24  # skip re-analysis within this window
 
     # Scheduler — global default and per-platform overrides
@@ -37,11 +38,7 @@ class Settings(BaseSettings):
 
     # AI relevance filter
     relevance_filter_enabled: bool = True
-    user_profile: str = (
-        "计算机科学专业毕业生，关注AI科技进展，"
-        "有自主创业想法（电商、线上经济、炒股、炒币），"
-        "关注对个人发展和商业机会有价值的信息"
-    )
+    user_profile: str = ""
 
     # TikTok
     tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session

@@ -110,32 +110,37 @@ async def deep_analyze_keyword(
 async def auto_deep_analyze(
     db: AsyncSession,
     scored_keywords: dict[str, dict],
-    limit: int | None = None,
 ) -> list[dict]:
     """Automatically deep-analyze top-scored keywords after collection.
+
+    Selects the top ``deep_analysis_auto_ratio`` fraction of relevant keywords,
+    capped at ``deep_analysis_auto_max``.
 
     Args:
         db: Database session.
         scored_keywords: Dict from score_relevance() with {keyword: {score, label, reason}}.
-        limit: Max keywords to analyze. Defaults to settings.deep_analysis_auto_limit.
 
     Returns:
         List of analysis result dicts.
     """
-    if limit is None:
-        limit = settings.deep_analysis_auto_limit
+    ratio = settings.deep_analysis_auto_ratio
+    max_cap = settings.deep_analysis_auto_max
 
-    if limit <= 0:
+    if ratio <= 0 or max_cap <= 0:
         return []
 
-    # Sort by score descending, take top N relevant keywords
+    # Sort by score descending
     relevant = [
         (kw, info)
         for kw, info in scored_keywords.items()
         if info.get("label") == "relevant" and info.get("score", 0) > 0
     ]
     relevant.sort(key=lambda x: x[1].get("score", 0), reverse=True)
-    top_keywords = [kw for kw, _ in relevant[:limit]]
+
+    # Take top ratio%, capped at max
+    count = max(1, int(len(relevant) * ratio)) if relevant else 0
+    count = min(count, max_cap)
+    top_keywords = [kw for kw, _ in relevant[:count]]
 
     if not top_keywords:
         return []

@@ -192,9 +192,9 @@ async def run_all_collectors(
         await auto_analyze_signals(db, signals, limit=settings.signal_auto_analyze_limit)
 
     # Auto deep analysis on highest-scored keywords (Stage 3)
-    if relevance_scores and settings.deep_analysis_auto_limit > 0:
+    if relevance_scores and settings.deep_analysis_auto_max > 0:
         from app.services.deep_analysis import auto_deep_analyze
 
-        await auto_deep_analyze(db, relevance_scores, limit=settings.deep_analysis_auto_limit)
+        await auto_deep_analyze(db, relevance_scores)
 
     return {"status": "ok", "records_count": total_records, "platforms": platform_results}
