@@ -11,6 +11,7 @@ import {
   Search,
   Download,
   X,
+  Filter,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -213,6 +214,18 @@ function TrendRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {item.relevance_label && (
+          <span
+            className={`text-xs px-1.5 py-0.5 rounded ${
+              item.relevance_label === "relevant"
+                ? "bg-green-100 text-green-700"
+                : "bg-gray-100 text-gray-400"
+            }`}
+            title={`相关性: ${item.relevance_score ?? "—"}`}
+          >
+            {item.relevance_label === "relevant" ? "相关" : "无关"}
+          </span>
+        )}
         <VelocityBadge
           velocity={velocityData?.velocity ?? null}
           acceleration={velocityData?.acceleration ?? null}
@@ -260,6 +273,7 @@ function PlatformCard({
   refreshKey,
   velocityMap,
   searchQuery,
+  relevantOnly,
   onItemsLoaded,
   onKeywordClick,
 }: {
@@ -267,6 +281,7 @@ function PlatformCard({
   refreshKey: number
   velocityMap: Record<string, VelocityItem>
   searchQuery: string
+  relevantOnly: boolean
   onItemsLoaded: (platform: string, items: TrendItem[]) => void
   onKeywordClick: (keyword: string) => void
 }) {
@@ -277,7 +292,7 @@ function PlatformCard({
   useEffect(() => {
     let cancelled = false
     api.trends
-      .list(1, 50, slug)
+      .list(1, 50, slug, relevantOnly)
       .then((res) => {
         if (!cancelled) {
           setItems(res.items)
@@ -287,7 +302,7 @@ function PlatformCard({
       .catch(() => { if (!cancelled) { setItems([]); onItemsLoaded(slug, []) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true; setLoading(true) }
-  }, [slug, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [slug, refreshKey, relevantOnly]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     if (!searchQuery) return items
@@ -372,6 +387,7 @@ export default function TrendsPage() {
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
   const [compareKeyword, setCompareKeyword] = useState<string | null>(null)
   const [allItems, setAllItems] = useState<Record<string, TrendItem[]>>({})
+  const [relevantOnly, setRelevantOnly] = useState(false)
 
   useEffect(() => {
     api.trends
@@ -448,6 +464,16 @@ export default function TrendsPage() {
             </button>
           )}
         </div>
+        <Button
+          variant={relevantOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => setRelevantOnly((v) => !v)}
+          className="gap-1.5 shrink-0"
+          title="AI 智能过滤：只显示与你相关的趋势"
+        >
+          <Filter className="w-3.5 h-3.5" />
+          {relevantOnly ? "已过滤" : "智能过滤"}
+        </Button>
         <div className="flex gap-2 flex-wrap">
           <Badge
             variant={activePlatform === null ? "default" : "outline"}
@@ -495,6 +521,7 @@ export default function TrendsPage() {
             refreshKey={refreshKey}
             velocityMap={velocityMap}
             searchQuery={searchQuery}
+            relevantOnly={relevantOnly}
             onItemsLoaded={handleItemsLoaded}
             onKeywordClick={handleKeywordClick}
           />

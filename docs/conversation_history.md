@@ -235,4 +235,85 @@
 - 新增 GET /api/v1/signals/recent 和 POST /api/v1/signals/detect 接口
 - 前端仪表盘新增"趋势信号"统计卡片和信号列表
 - 15个单元测试 + 全量208测试通过
-- PR #63: https://github.com/JHZhang2736/trendTracker/pull/63
+- PR #63: https://github.com/JHZhang2736/trendTracker/pull/63（已合并）
+
+---
+
+**[用户]** 列举其他需要改动的
+
+**[AI]** 按难度排列剩余改进点：①采集频率分级（per-platform cron）②AI 信号驱动主动分析 ③趋势速度/加速度 ④前端UX增强 ⑤混合采集层（Agent fallback）
+
+---
+
+**[用户]** 请你实现#1，#2
+
+**[AI]** 分两个 Issue 并行开发：
+
+**Issue #64 — 采集频率分级 per-platform cron**
+- config.py 新增 weibo_cron/google_cron/tiktok_cron 配置
+- collector service 的 run_all_collectors 支持 platforms 参数过滤
+- scheduler.py 重写，使用 functools.partial 为每个平台注册独立定时任务
+- 6个新测试通过，全量218测试通过
+- PR #66 → 已合并
+
+**Issue #65 — AI 信号驱动分析 + 信号简报**
+- SignalLog 新增 ai_summary 字段
+- 实现 auto_analyze_signals()：采集后自动分析 Top-N 信号
+- 简报生成改为信号驱动，优先使用趋势信号输入
+- 前端信号卡片展示 AI 摘要（蓝色左边框样式）
+- 5个新 auto_analyze 测试通过，全量218测试通过
+- PR #67 → 已合并
+
+---
+
+**[用户]** 现在还有什么需要添加的
+
+**[AI]** 列出剩余3个改进点：③趋势速度/加速度 ④前端UX增强 ⑤混合采集层
+
+---
+
+**[用户]** 请你实现#3，#4
+
+**[AI]** 创建 Issue #68 和 #69，在同一分支实现：
+
+**Issue #68 — 趋势速度/加速度指标**
+- 新增 get_keyword_velocity: 将24h窗口三等分，计算热度变化率(velocity)和加速度(acceleration)
+- 新增 GET /api/v1/trends/velocity 端点，支持平台过滤和时间窗口参数
+- 前端趋势列表每行展示速度箭头（↑↓）+ 百分比 + 加速度双箭头
+- 12个新测试（纯函数 + 集成 + 端点）
+
+**Issue #69 — 前端 UX 增强**
+- 搜索框：实时过滤关键词（跨所有平台卡片）
+- 平台筛选：Badge 标签切换单平台/全部视图
+- 跨平台对比：点击关键词展示该词在不同平台的热度+速度对比面板
+- CSV 导出：每个平台卡片可导出当前筛选结果为 CSV（含 BOM 支持中文）
+- 信号详情：仪表盘信号卡片可展开查看完整信息（平台/数值/时间/AI摘要）
+
+- 230/230 全量测试通过，TypeScript + ESLint + next build 通过
+- PR #70 → 已合并
+
+---
+
+### 对话 5 — 2026-03-22
+
+**用户**：我想引入一个AI信息过滤模块，将无用的娱乐新闻、社会新闻等丢弃掉，你认为这可行吗
+**AI**：提出三种方案（纯AI分类、关键词规则、混合），推荐方案A纯AI分类
+
+**用户**：方案A还是基于关键词过滤的吗，能完全靠AI自主过滤吗
+**AI**：方案A完全靠AI，不依赖任何关键词规则
+
+**用户**：我的意思是由AI判断这个信息对我个人发展、商业机会等是否有用处
+**AI**：明白，需要用户画像 + AI打分，让LLM基于用户背景判断相关性
+
+**用户**：我是一个计算机科学专业的毕业生，我会时常关注AI方面的科技进展。但是除了上班，我也有自主创业的想法，包括电商，线上经济，炒股，炒币等。
+
+**Issue #72 — AI 信息相关性过滤模块**
+- Trend模型新增 relevance_score (float) + relevance_label (relevant/irrelevant) 字段
+- 新增 app/services/relevance.py：批量调用LLM，基于用户画像对关键词做相关性评分
+- 采集pipeline中，commit后自动对新关键词做AI相关性评估
+- .env 新增 RELEVANCE_FILTER_ENABLED + USER_PROFILE 配置
+- 后端 GET /api/v1/trends 新增 relevant_only 参数
+- 前端趋势列表新增「智能过滤」按钮 + 每行显示「相关/无关」标签
+- Alembic迁移 003_add_trend_relevance_fields
+- 9个新测试（解析测试 + mock LLM集成 + 失败回退）
+- 239/239 全量测试通过

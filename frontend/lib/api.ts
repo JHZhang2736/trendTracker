@@ -27,6 +27,8 @@ export interface TrendItem {
   heat_score: number | null
   url: string | null
   collected_at: string
+  relevance_score: number | null
+  relevance_label: string | null
 }
 
 export interface TrendsListResponse {
@@ -188,9 +190,10 @@ export const api = {
       request<SignalListResponse>(`/api/v1/signals/recent?hours=${hours}&limit=${limit}`),
   },
   trends: {
-    list: (page = 1, pageSize = 20, platform?: string) => {
+    list: (page = 1, pageSize = 20, platform?: string, relevantOnly = false) => {
       const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
       if (platform) params.set("platform", platform)
+      if (relevantOnly) params.set("relevant_only", "true")
       return request<TrendsListResponse>(`/api/v1/trends?${params}`)
     },
     top: (limit = 20) => request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),

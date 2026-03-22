@@ -26,6 +26,8 @@ class Trend(Base):
     heat_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     collected_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
     url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    relevance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    relevance_label: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     platform_rel: Mapped[Optional[Platform]] = relationship("Platform", back_populates="trends")
     ai_insights: Mapped[list[AIInsight]] = relationship("AIInsight", back_populates="trend")

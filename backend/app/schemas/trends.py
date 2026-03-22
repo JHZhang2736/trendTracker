@@ -15,6 +15,8 @@ class TrendItem(BaseModel):
     url: str | None
     collected_at: datetime
     convergence_score: float
+    relevance_score: float | None = None
+    relevance_label: str | None = None
 
 
 class TopTrendItem(BaseModel):
