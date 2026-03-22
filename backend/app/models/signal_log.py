@@ -22,6 +22,9 @@ class SignalLog(Base):
     value: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True, comment="信号量化值（如跃升位数、倍数等）"
     )
+    ai_summary: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="AI 自动分析摘要"
+    )
     detected_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
     def __repr__(self) -> str:

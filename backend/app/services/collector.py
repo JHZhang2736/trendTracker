@@ -107,8 +107,14 @@ async def run_all_collectors(
     await check_alerts(db)
 
     # Detect trend signals (rank jumps, new entries, heat surges)
-    from app.services.signals import detect_signals
+    from app.services.signals import auto_analyze_signals, detect_signals
 
-    await detect_signals(db)
+    signals = await detect_signals(db)
+
+    # Auto-analyze top signals with AI (if configured)
+    from app.config import settings
+
+    if signals and settings.signal_auto_analyze_limit > 0:
+        await auto_analyze_signals(db, signals, limit=settings.signal_auto_analyze_limit)
 
     return {"status": "ok", "records_count": total_records, "platforms": platform_results}

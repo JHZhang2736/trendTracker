@@ -14,6 +14,7 @@ class SignalItem(BaseModel):
     keyword: str
     description: str
     value: float | None
+    ai_summary: str | None = None
     detected_at: datetime
 
 

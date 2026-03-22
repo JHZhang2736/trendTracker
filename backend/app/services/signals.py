@@ -237,3 +237,38 @@ async def get_recent_signals(db: AsyncSession, hours: int = 24, limit: int = 50)
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Auto-analyze: AI-driven signal analysis
+# ---------------------------------------------------------------------------
+
+
+async def auto_analyze_signals(db: AsyncSession, signals: list[SignalLog], limit: int = 3) -> int:
+    """Automatically run AI analysis on the top-N signals by value.
+
+    Updates the ``ai_summary`` field on each analyzed SignalLog.
+    Returns the number of signals analyzed.
+    """
+    if not signals or limit <= 0:
+        return 0
+
+    # Sort by value descending (biggest jump / surge first), take top N
+    ranked = sorted(signals, key=lambda s: s.value or 0, reverse=True)[:limit]
+
+    analyzed = 0
+    for sig in ranked:
+        try:
+            from app.services.ai import analyze_keyword
+
+            result = await analyze_keyword(keyword=sig.keyword, db=db)
+            sig.ai_summary = result.business_insight[:500] if result.business_insight else None
+            analyzed += 1
+            logger.info("auto_analyze_signals: analyzed %r (%s)", sig.keyword, sig.signal_type)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto_analyze_signals: failed for %r — %s", sig.keyword, exc)
+
+    if analyzed:
+        await db.commit()
+
+    return analyzed
