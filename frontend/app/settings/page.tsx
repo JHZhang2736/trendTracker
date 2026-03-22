@@ -38,7 +38,7 @@ function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
 export default function SettingsPage() {
   const [config, setConfig] = useState<SystemConfig | null>(null)
   const [scheduler, setScheduler] = useState<SchedulerStatus | null>(null)
-  const [activePlatforms, setActivePlatforms] = useState<string[]>([])
+  const [platformLastPull, setPlatformLastPull] = useState<Record<string, string>>({})
   const [collecting, setCollecting] = useState(false)
   const [collectResult, setCollectResult] = useState<CollectorRunResponse | null>(null)
   const [clearing, setClearing] = useState(false)
@@ -56,7 +56,13 @@ export default function SettingsPage() {
       ])
       setConfig(cfg)
       setScheduler(sched)
-      setActivePlatforms(Object.keys(topByPlatform.platforms))
+      const lastPull: Record<string, string> = {}
+      for (const [platform, items] of Object.entries(topByPlatform.platforms)) {
+        if (items.length > 0) {
+          lastPull[platform] = items[0].collected_at
+        }
+      }
+      setPlatformLastPull(lastPull)
     } catch {
       // backend offline — leave nulls
     } finally {
@@ -196,7 +202,7 @@ export default function SettingsPage() {
             <div className="divide-y rounded-md border text-sm">
               {PLATFORMS.map((slug) => {
                 const meta = getPlatformMeta(slug)
-                const active = activePlatforms.includes(slug)
+                const lastPull = platformLastPull[slug]
                 const needsConfig = slug === "tiktok" && config && !config.tiktok.configured
                 return (
                   <div key={slug} className="flex items-center justify-between px-3 py-2.5">
@@ -211,12 +217,19 @@ export default function SettingsPage() {
                       {needsConfig && (
                         <span className="text-xs text-amber-500">需配置 TIKTOK_COOKIE</span>
                       )}
-                      <Badge
-                        variant={active ? "default" : "secondary"}
-                        className={active ? "bg-green-500 hover:bg-green-500" : ""}
-                      >
-                        {active ? "近24h有数据" : "无近期数据"}
-                      </Badge>
+                      {lastPull ? (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          {new Date(lastPull).toLocaleString("zh-CN", {
+                            month: "2-digit", day: "2-digit",
+                            hour: "2-digit", minute: "2-digit",
+                          })}
+                        </span>
+                      ) : (
+                        <Badge variant="secondary" className="text-muted-foreground">
+                          无近期数据
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 )
