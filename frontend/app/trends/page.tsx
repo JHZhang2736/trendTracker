@@ -1,15 +1,31 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { TrendingUp, TrendingDown, Minus, ExternalLink, Flame, RefreshCw } from "lucide-react"
+import { useEffect, useState, useCallback, useMemo } from "react"
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ExternalLink,
+  Flame,
+  RefreshCw,
+  Search,
+  Download,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type TrendItem, type VelocityItem } from "@/lib/api"
 import { PLATFORM_CONFIG, getPlatformMeta } from "@/lib/platform-config"
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function formatHeat(score: number | null): string {
-  if (score === null) return "—"
+  if (score === null) return "\u2014"
   if (score >= 1_000_000) return `${(score / 1_000_000).toFixed(1)}M`
   if (score >= 1_000) return `${(score / 1_000).toFixed(0)}K`
   return String(score)
@@ -24,6 +40,35 @@ function formatTime(iso: string): string {
     minute: "2-digit",
   })
 }
+
+function downloadCSV(items: TrendItem[], velocityMap: Record<string, VelocityItem>, platform: string) {
+  const header = "Platform,Keyword,Rank,Heat Score,Velocity(%),Acceleration,Collected At,URL"
+  const rows = items.map((item, i) => {
+    const vel = velocityMap[`${platform}:${item.keyword}`]
+    return [
+      platform,
+      `"${item.keyword.replace(/"/g, '""')}"`,
+      i + 1,
+      item.heat_score ?? "",
+      vel?.velocity ?? "",
+      vel?.acceleration ?? "",
+      item.collected_at,
+      item.url ?? "",
+    ].join(",")
+  })
+  const csv = [header, ...rows].join("\n")
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `trends_${platform}_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ---------------------------------------------------------------------------
+// VelocityBadge
+// ---------------------------------------------------------------------------
 
 function VelocityBadge({ velocity, acceleration }: { velocity: number | null; acceleration: number | null }) {
   if (velocity === null || velocity === 0) {
@@ -57,14 +102,82 @@ function VelocityBadge({ velocity, acceleration }: { velocity: number | null; ac
   )
 }
 
+// ---------------------------------------------------------------------------
+// Cross-platform comparison panel
+// ---------------------------------------------------------------------------
+
+function CrossPlatformPanel({
+  keyword,
+  allItems,
+  velocityMap,
+  onClose,
+}: {
+  keyword: string
+  allItems: Record<string, TrendItem[]>
+  velocityMap: Record<string, VelocityItem>
+  onClose: () => void
+}) {
+  const matches: { platform: string; item: TrendItem; vel?: VelocityItem }[] = []
+  for (const [platform, items] of Object.entries(allItems)) {
+    const found = items.find((it) => it.keyword === keyword)
+    if (found) {
+      matches.push({ platform, item: found, vel: velocityMap[`${platform}:${keyword}`] })
+    }
+  }
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/30">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center justify-between">
+          <span>跨平台对比: {keyword}</span>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-6 w-6 p-0">
+            <X className="w-4 h-4" />
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {matches.length === 0 ? (
+          <p className="text-sm text-muted-foreground">该关键词在当前数据中未找到</p>
+        ) : (
+          <div className="space-y-2">
+            {matches.map(({ platform, item, vel }) => {
+              const meta = getPlatformMeta(platform)
+              return (
+                <div key={platform} className="flex items-center gap-3 text-sm">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: meta.color }}
+                  />
+                  <span className="w-24 truncate font-medium">{meta.displayName}</span>
+                  <span className="text-muted-foreground font-mono w-12 text-right">
+                    {formatHeat(item.heat_score)}
+                  </span>
+                  <VelocityBadge velocity={vel?.velocity ?? null} acceleration={vel?.acceleration ?? null} />
+                  <span className="text-xs text-muted-foreground">{formatTime(item.collected_at)}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// TrendRow + Skeleton
+// ---------------------------------------------------------------------------
+
 function TrendRow({
   item,
   index,
   velocityData,
+  onKeywordClick,
 }: {
   item: TrendItem
   index: number
   velocityData?: VelocityItem
+  onKeywordClick: (keyword: string) => void
 }) {
   const rankDisplay = index + 1
   const isHot = rankDisplay <= 3
@@ -88,7 +201,13 @@ function TrendRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {isHot && <Flame className="w-3 h-3 text-red-400 shrink-0" />}
-          <span className="text-sm truncate">{item.keyword}</span>
+          <button
+            className="text-sm truncate hover:text-blue-600 hover:underline text-left"
+            onClick={() => onKeywordClick(item.keyword)}
+            title="点击查看跨平台对比"
+          >
+            {item.keyword}
+          </button>
         </div>
         <span className="text-xs text-muted-foreground">{formatTime(item.collected_at)}</span>
       </div>
@@ -132,14 +251,24 @@ function TrendRowSkeleton() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// PlatformCard
+// ---------------------------------------------------------------------------
+
 function PlatformCard({
   slug,
   refreshKey,
   velocityMap,
+  searchQuery,
+  onItemsLoaded,
+  onKeywordClick,
 }: {
   slug: string
   refreshKey: number
   velocityMap: Record<string, VelocityItem>
+  searchQuery: string
+  onItemsLoaded: (platform: string, items: TrendItem[]) => void
+  onKeywordClick: (keyword: string) => void
 }) {
   const [items, setItems] = useState<TrendItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,11 +278,22 @@ function PlatformCard({
     let cancelled = false
     api.trends
       .list(1, 50, slug)
-      .then((res) => { if (!cancelled) setItems(res.items) })
-      .catch(() => { if (!cancelled) setItems([]) })
+      .then((res) => {
+        if (!cancelled) {
+          setItems(res.items)
+          onItemsLoaded(slug, res.items)
+        }
+      })
+      .catch(() => { if (!cancelled) { setItems([]); onItemsLoaded(slug, []) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true; setLoading(true) }
-  }, [slug, refreshKey])
+  }, [slug, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filtered = useMemo(() => {
+    if (!searchQuery) return items
+    const q = searchQuery.toLowerCase()
+    return items.filter((it) => it.keyword.toLowerCase().includes(q))
+  }, [items, searchQuery])
 
   return (
     <Card className="flex flex-col">
@@ -165,8 +305,20 @@ function PlatformCard({
           />
           {meta.displayName}
           {!loading && (
-            <span className="text-xs font-normal text-muted-foreground ml-auto">
-              {items.length} 条
+            <span className="text-xs font-normal text-muted-foreground ml-auto flex items-center gap-2">
+              {searchQuery && filtered.length !== items.length && (
+                <span>{filtered.length}/{items.length}</span>
+              )}
+              {!searchQuery && <span>{items.length} 条</span>}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                title="导出 CSV"
+                onClick={() => downloadCSV(filtered, velocityMap, slug)}
+              >
+                <Download className="w-3.5 h-3.5" />
+              </Button>
             </span>
           )}
         </CardTitle>
@@ -175,18 +327,28 @@ function PlatformCard({
         <div className="h-[600px] overflow-y-auto">
           {loading ? (
             Array.from({ length: 12 }).map((_, i) => <TrendRowSkeleton key={i} />)
-          ) : items.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
-              <TrendingUp className="w-8 h-8 opacity-20" />
-              <p className="text-sm">暂无近24小时数据</p>
+              {searchQuery ? (
+                <>
+                  <Search className="w-8 h-8 opacity-20" />
+                  <p className="text-sm">无匹配结果</p>
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="w-8 h-8 opacity-20" />
+                  <p className="text-sm">暂无近24小时数据</p>
+                </>
+              )}
             </div>
           ) : (
-            items.map((item, i) => (
+            filtered.map((item, i) => (
               <TrendRow
                 key={`${item.keyword}-${i}`}
                 item={item}
                 index={i}
                 velocityData={velocityMap[`${slug}:${item.keyword}`]}
+                onKeywordClick={onKeywordClick}
               />
             ))
           )}
@@ -196,12 +358,20 @@ function PlatformCard({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
 const PLATFORMS = Object.keys(PLATFORM_CONFIG)
 
 export default function TrendsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [velocityMap, setVelocityMap] = useState<Record<string, VelocityItem>>({})
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activePlatform, setActivePlatform] = useState<string | null>(null)
+  const [compareKeyword, setCompareKeyword] = useState<string | null>(null)
+  const [allItems, setAllItems] = useState<Record<string, TrendItem[]>>({})
 
   useEffect(() => {
     api.trends
@@ -226,8 +396,19 @@ export default function TrendsPage() {
     }
   }, [])
 
+  const handleItemsLoaded = useCallback((platform: string, items: TrendItem[]) => {
+    setAllItems((prev) => ({ ...prev, [platform]: items }))
+  }, [])
+
+  const handleKeywordClick = useCallback((keyword: string) => {
+    setCompareKeyword((prev) => (prev === keyword ? null : keyword))
+  }, [])
+
+  const visiblePlatforms = activePlatform ? [activePlatform] : PLATFORMS
+
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -248,9 +429,75 @@ export default function TrendsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        {PLATFORMS.map((slug) => (
-          <PlatformCard key={slug} slug={slug} refreshKey={refreshKey} velocityMap={velocityMap} />
+      {/* Search + Platform Filter */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索关键词..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+          {searchQuery && (
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setSearchQuery("")}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Badge
+            variant={activePlatform === null ? "default" : "outline"}
+            className="cursor-pointer"
+            onClick={() => setActivePlatform(null)}
+          >
+            全部
+          </Badge>
+          {PLATFORMS.map((slug) => {
+            const meta = getPlatformMeta(slug)
+            return (
+              <Badge
+                key={slug}
+                variant={activePlatform === slug ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setActivePlatform(activePlatform === slug ? null : slug)}
+              >
+                <span
+                  className="inline-block w-2 h-2 rounded-full mr-1"
+                  style={{ backgroundColor: meta.color }}
+                />
+                {meta.displayName}
+              </Badge>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Cross-platform comparison */}
+      {compareKeyword && (
+        <CrossPlatformPanel
+          keyword={compareKeyword}
+          allItems={allItems}
+          velocityMap={velocityMap}
+          onClose={() => setCompareKeyword(null)}
+        />
+      )}
+
+      {/* Platform Cards */}
+      <div className={`grid grid-cols-1 gap-6 ${activePlatform ? "" : "lg:grid-cols-2 xl:grid-cols-3"}`}>
+        {visiblePlatforms.map((slug) => (
+          <PlatformCard
+            key={slug}
+            slug={slug}
+            refreshKey={refreshKey}
+            velocityMap={velocityMap}
+            searchQuery={searchQuery}
+            onItemsLoaded={handleItemsLoaded}
+            onKeywordClick={handleKeywordClick}
+          />
         ))}
       </div>
     </div>
