@@ -138,4 +138,13 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
             label = "relevant" if score >= 50 else "irrelevant"
         result[matched_kw] = {"score": min(100.0, max(0.0, score)), "label": label}
 
+    if len(result) < len(keywords):
+        missed = [kw for kw in keywords if kw not in result]
+        logger.warning(
+            "Relevance parse: %d/%d matched, missed: %s",
+            len(result),
+            len(keywords),
+            missed,
+        )
+
     return result

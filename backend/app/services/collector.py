@@ -37,8 +37,13 @@ async def _score_new_keywords(
     if not trends:
         return
 
-    # Deduplicate keywords for the API call
-    unique_keywords = list({t.keyword for t in trends})
+    # Deduplicate keywords for the API call (preserve insertion order)
+    seen: set[str] = set()
+    unique_keywords: list[str] = []
+    for t in trends:
+        if t.keyword not in seen:
+            seen.add(t.keyword)
+            unique_keywords.append(t.keyword)
     logger.info("Scoring relevance for %d unique keywords", len(unique_keywords))
 
     try:
@@ -48,11 +53,21 @@ async def _score_new_keywords(
         return
 
     # Apply scores back to trend records
+    unmatched = set()
     for trend in trends:
         info = scores.get(trend.keyword)
         if info:
             trend.relevance_score = info["score"]
             trend.relevance_label = info["label"]
+        else:
+            unmatched.add(trend.keyword)
+
+    if unmatched:
+        logger.warning(
+            "Relevance: %d keywords got no score from LLM: %s",
+            len(unmatched),
+            list(unmatched)[:10],
+        )
 
     await db.commit()
     relevant_count = sum(1 for t in trends if t.relevance_label == "relevant")
