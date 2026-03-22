@@ -32,11 +32,6 @@ def _patch_llm():
     return patch("app.services.brief.LLMFactory.create", return_value=mock_provider)
 
 
-def _patch_email():
-    """Patch send_email to avoid real SMTP calls."""
-    return patch("app.services.brief.send_email", new=AsyncMock(return_value=False))
-
-
 async def _seed_trend(db: AsyncSession, keyword: str) -> None:
     from datetime import datetime, timezone
 
@@ -61,10 +56,10 @@ async def _seed_trend(db: AsyncSession, keyword: str) -> None:
 
 @pytest.mark.asyncio
 async def test_generate_brief_returns_daily_brief(db_session: AsyncSession):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         from app.services.brief import generate_daily_brief
 
-        brief = await generate_daily_brief(db=db_session, send_mail=False)
+        brief = await generate_daily_brief(db=db_session)
 
     assert isinstance(brief, DailyBrief)
     assert brief.id is not None
@@ -86,10 +81,10 @@ async def test_generate_brief_uses_top_keywords(db_session: AsyncSession):
     mock_provider = MagicMock()
     mock_provider.chat = capture_chat
 
-    with patch("app.services.brief.LLMFactory.create", return_value=mock_provider), _patch_email():
+    with patch("app.services.brief.LLMFactory.create", return_value=mock_provider):
         from app.services.brief import generate_daily_brief
 
-        await generate_daily_brief(db=db_session, send_mail=False)
+        await generate_daily_brief(db=db_session)
 
     user_msg = next(m for m in captured_messages if m.role == "user")
     assert "人工智能" in user_msg.content
@@ -98,40 +93,14 @@ async def test_generate_brief_uses_top_keywords(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_generate_brief_upserts_on_same_day(db_session: AsyncSession):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         from app.services.brief import generate_daily_brief
 
-        brief1 = await generate_daily_brief(db=db_session, send_mail=False)
-        brief2 = await generate_daily_brief(db=db_session, send_mail=False)
+        brief1 = await generate_daily_brief(db=db_session)
+        brief2 = await generate_daily_brief(db=db_session)
 
     # Same row updated, not a second row
     assert brief1.id == brief2.id
-
-
-@pytest.mark.asyncio
-async def test_generate_brief_sends_email_when_configured(db_session: AsyncSession):
-    mock_send = AsyncMock(return_value=True)
-    with _patch_llm(), patch("app.services.brief.send_email", new=mock_send):
-        from app.services.brief import generate_daily_brief
-
-        await generate_daily_brief(db=db_session, send_mail=True)
-
-    mock_send.assert_called_once()
-    call_kwargs = mock_send.call_args
-    assert "TrendTracker" in call_kwargs.kwargs.get("subject", "") or "TrendTracker" in str(
-        call_kwargs
-    )
-
-
-@pytest.mark.asyncio
-async def test_generate_brief_skips_email_when_send_mail_false(db_session: AsyncSession):
-    mock_send = AsyncMock(return_value=False)
-    with _patch_llm(), patch("app.services.brief.send_email", new=mock_send):
-        from app.services.brief import generate_daily_brief
-
-        await generate_daily_brief(db=db_session, send_mail=False)
-
-    mock_send.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -144,10 +113,10 @@ async def test_get_latest_brief_returns_none_when_empty(db_session: AsyncSession
 
 @pytest.mark.asyncio
 async def test_get_latest_brief_returns_most_recent(db_session: AsyncSession):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         from app.services.brief import generate_daily_brief, get_latest_brief
 
-        await generate_daily_brief(db=db_session, send_mail=False)
+        await generate_daily_brief(db=db_session)
         latest = await get_latest_brief(db=db_session)
 
     assert latest is not None
@@ -161,14 +130,14 @@ async def test_get_latest_brief_returns_most_recent(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_create_brief_endpoint_returns_200(test_client: AsyncClient):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         resp = await test_client.post("/api/v1/ai/brief")
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_create_brief_endpoint_response_schema(test_client: AsyncClient):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         data = (await test_client.post("/api/v1/ai/brief")).json()
     required = {"id", "date", "content", "model", "created_at"}
     assert required <= set(data.keys())
@@ -183,7 +152,7 @@ async def test_latest_brief_returns_404_when_none(test_client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_latest_brief_returns_200_after_creation(test_client: AsyncClient):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         await test_client.post("/api/v1/ai/brief")
         resp = await test_client.get("/api/v1/ai/brief/latest")
     assert resp.status_code == 200
@@ -193,7 +162,7 @@ async def test_latest_brief_returns_200_after_creation(test_client: AsyncClient)
 
 @pytest.mark.asyncio
 async def test_latest_brief_date_is_today(test_client: AsyncClient):
-    with _patch_llm(), _patch_email():
+    with _patch_llm():
         await test_client.post("/api/v1/ai/brief")
         data = (await test_client.get("/api/v1/ai/brief/latest")).json()
     assert data["date"] == date.today().isoformat()

@@ -251,37 +251,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* 邮件告警 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">邮件告警</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : config ? (
-            <div className="divide-y rounded-md border text-sm">
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-muted-foreground">SMTP 服务器</span>
-                <span className="font-mono">{config.email.smtp_host}:{config.email.smtp_port}</span>
-              </div>
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-muted-foreground">账号凭据</span>
-                <StatusBadge ok={config.email.configured} />
-              </div>
-              <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-muted-foreground">收件人</span>
-                <span className="text-xs font-mono">
-                  {config.email.notify_email ?? <span className="text-muted-foreground">未设置</span>}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">无法加载配置</p>
-          )}
-        </CardContent>
-      </Card>
-
       {/* 数据管理 */}
       <Card className="border-destructive/40">
         <CardHeader className="pb-3">
@@ -289,7 +258,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            清空所有已采集的热词数据。此操作不可撤销，AI 简报和告警规则不受影响。
+            清空所有已采集的热词数据。此操作不可撤销，AI 简报不受影响。
           </p>
           <div className="flex items-center gap-4">
             <Button
@@ -314,7 +283,7 @@ export default function SettingsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>确认清空所有热词数据？</AlertDialogTitle>
                 <AlertDialogDescription>
-                  这将删除数据库中所有已采集的热词记录，操作不可撤销。AI 简报和告警规则不会被删除。
+                  这将删除数据库中所有已采集的热词记录，操作不可撤销。AI 简报不会被删除。
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

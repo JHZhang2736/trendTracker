@@ -1,4 +1,4 @@
-"""AI router — keyword analysis and daily brief endpoints."""
+"""AI router — deep analysis and daily brief endpoints."""
 
 from __future__ import annotations
 
@@ -7,13 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.ai import (
-    AnalyzeRequest,
-    AnalyzeResult,
     BriefResponse,
     DeepAnalysisRequest,
     DeepAnalysisResponse,
 )
-from app.services.ai import analyze_keyword
 from app.services.brief import generate_daily_brief, get_latest_brief
 from app.services.deep_analysis import (
     deep_analyze_keyword,
@@ -22,23 +19,6 @@ from app.services.deep_analysis import (
 )
 
 router = APIRouter()
-
-
-@router.post(
-    "/analyze",
-    summary="AI 趋势词分析（商业建议 + 情感极性 + 相关词）",
-    response_model=AnalyzeResult,
-)
-async def analyze(
-    body: AnalyzeRequest,
-    db: AsyncSession = Depends(get_db),
-) -> AnalyzeResult:
-    """Analyze a trend keyword using the configured LLM provider.
-
-    Returns business insight, sentiment polarity, and 5 related keywords.
-    Result is persisted to the ``ai_insights`` table.
-    """
-    return await analyze_keyword(keyword=body.keyword, db=db)
 
 
 @router.post(

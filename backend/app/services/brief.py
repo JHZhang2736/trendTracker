@@ -12,7 +12,6 @@ from app.ai.base import ChatMessage
 from app.ai.factory import LLMFactory
 from app.config import settings
 from app.models.daily_brief import DailyBrief
-from app.services.email import send_email
 from app.services.signals import get_recent_signals
 from app.services.trends import get_top_trends
 
@@ -25,8 +24,8 @@ _BRIEF_SYSTEM_PROMPT = (
 )
 
 
-async def generate_daily_brief(db: AsyncSession, send_mail: bool = True) -> DailyBrief:
-    """Generate today's brief, persist it, and optionally email it.
+async def generate_daily_brief(db: AsyncSession) -> DailyBrief:
+    """Generate today's brief and persist it.
 
     Signal-driven: prioritizes recent signals, falls back to top keywords.
     If a brief for today already exists it will be overwritten.
@@ -88,12 +87,6 @@ async def generate_daily_brief(db: AsyncSession, send_mail: bool = True) -> Dail
 
     await db.commit()
     await db.refresh(brief)
-
-    if send_mail:
-        await send_email(
-            subject=f"TrendTracker 每日简报 {today}",
-            body=content,
-        )
 
     return brief
 

@@ -20,12 +20,6 @@ async def get_system_config() -> dict:
             "provider": settings.llm_provider,
             "configured": bool(settings.minimax_api_key and settings.minimax_group_id),
         },
-        "email": {
-            "configured": bool(settings.smtp_user and settings.smtp_password),
-            "smtp_host": settings.smtp_host,
-            "smtp_port": settings.smtp_port,
-            "notify_email": settings.alert_email_to or None,
-        },
         "tiktok": {
             "configured": bool(settings.tiktok_cookie),
         },

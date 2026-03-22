@@ -43,13 +43,6 @@ class Settings(BaseSettings):
     # TikTok
     tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session
 
-    # Email
-    smtp_host: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    alert_email_to: str = ""
-
     @property
     def database_url(self) -> str:
         return (

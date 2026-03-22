@@ -273,8 +273,6 @@ async def test_system_config_schema(test_client: AsyncClient):
     assert "ai" in data
     assert "provider" in data["ai"]
     assert "configured" in data["ai"]
-    assert "email" in data
-    assert "configured" in data["email"]
     assert "tiktok" in data
     assert "configured" in data["tiktok"]
     assert "scheduler" in data
