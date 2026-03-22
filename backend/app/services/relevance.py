@@ -110,24 +110,25 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
 
     result: dict[str, dict] = {}
 
-    # Build index-based lookup for matching by index (more robust than keyword matching)
+    # Build index-based lookup (1-based)
     kw_by_index = {i + 1: kw for i, kw in enumerate(keywords)}
 
-    for item in items:
-        # Support both compact ("i","l","s") and full ("index","label","score") keys
-        idx = item.get("i") or item.get("index")
-        kw_from_item = item.get("keyword", "")
+    for pos, item in enumerate(items):
+        # Determine which keyword this item corresponds to:
+        # 1) Try explicit index field ("i" or "index")
+        # 2) Fall back to array position (most reliable when LLM returns in order)
+        idx = item.get("i") if item.get("i") is not None else item.get("index")
         matched_kw = None
 
-        if idx is not None and int(idx) in kw_by_index:
-            matched_kw = kw_by_index[int(idx)]
-        elif kw_from_item in keywords:
-            matched_kw = kw_from_item
-        else:
-            for orig_kw in keywords:
-                if orig_kw in kw_from_item or kw_from_item in orig_kw:
-                    matched_kw = orig_kw
-                    break
+        if idx is not None:
+            try:
+                matched_kw = kw_by_index.get(int(idx))
+            except (ValueError, TypeError):
+                pass
+
+        if matched_kw is None:
+            # Positional fallback: item[0] → keyword[1], item[1] → keyword[2], ...
+            matched_kw = kw_by_index.get(pos + 1)
 
         if matched_kw is None:
             continue
