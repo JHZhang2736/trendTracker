@@ -1,104 +1,121 @@
 # 系统架构图
 # TrendTracker — System Architecture
 
+**最后更新**: 2026-03-22
+
 ---
 
 ## 1. 整体系统架构
 
 ```mermaid
 graph TB
-    subgraph Client["🖥️ 浏览器"]
+    subgraph Client["浏览器"]
         UI[Next.js 前端<br/>Port 3000]
     end
 
-    subgraph Backend["⚙️ FastAPI 后端 Port 8000"]
+    subgraph Backend["FastAPI 后端 Port 8000"]
         direction TB
-        Router[Routers 路由层<br/>trends / ai / collector / alerts / system]
+        Router[Routers 路由层<br/>trends / ai / signals / collector / alerts]
         Service[Services 业务逻辑层]
-        Scheduler[APScheduler<br/>定时任务]
+        Scheduler[APScheduler<br/>分平台独立 cron]
 
         Router --> Service
         Scheduler --> Service
     end
 
-    subgraph CollectorLayer["📡 采集层（插件化）"]
+    subgraph CollectorLayer["采集层（插件化）"]
         direction LR
-        GC[GoogleCollector<br/>pytrends]
-        TC[TikTokCollector<br/>TikTok-Api]
-        WC[WeiboCollector<br/>自写爬虫]
-        BC[BaiduCollector<br/>baidu-index-spider]
+        GC[GoogleCollector<br/>RSS]
+        TC[TikTokCollector<br/>Creative Center API]
+        WC[WeiboCollector<br/>JSON API]
         EXT[[ + 可扩展 ]]
     end
 
-    subgraph AILayer["🤖 AI层（工厂模式）"]
+    subgraph AILayer["AI层（工厂模式）"]
         direction LR
-        Factory[LLMFactory]
-        MM[MiniMaxAdapter]
-        DS[DeepSeekAdapter<br/>预留]
-        QW[QwenAdapter<br/>预留]
-        Factory --> MM
-        Factory --> DS
-        Factory --> QW
+        LLMFactory[LLMFactory]
+        MM[MiniMaxProvider]
+        LLMFactory --> MM
     end
 
-    subgraph DataSources["🌐 外部数据源"]
+    subgraph SearchLayer["搜索层（工厂模式）"]
+        direction LR
+        SearchFactory[SearchFactory]
+        DDG[DuckDuckGoProvider]
+        SearchFactory --> DDG
+    end
+
+    subgraph DataSources["外部数据源"]
         direction LR
         Google[Google Trends]
         TikTok[TikTok]
         Weibo[微博]
-        Baidu[百度指数]
     end
 
-    subgraph Storage["🗄️ 存储层"]
+    subgraph Storage["存储层"]
         MySQL[(MySQL 8.0<br/>Port 3306)]
     end
 
-    subgraph Notify["📬 通知"]
+    subgraph Notify["通知"]
         Email[邮件 SMTP]
     end
 
     UI -->|REST API / JSON| Router
     Service --> CollectorLayer
     Service --> AILayer
+    Service --> SearchLayer
     Service --> MySQL
     Service --> Email
 
     GC -->|采集| Google
     TC -->|采集| TikTok
     WC -->|采集| Weibo
-    BC -->|采集| Baidu
 ```
 
 ---
 
-## 2. 数据流转图
+## 2. AI 智能管线数据流
 
 ```mermaid
-flowchart LR
-    subgraph Collect["定时采集（每日 06:00）"]
-        A[APScheduler 触发] --> B[CollectorRegistry<br/>获取所有启用的Collector]
-        B --> C1[Google]
-        B --> C2[TikTok]
-        B --> C3[Weibo]
-        B --> C4[Baidu]
+flowchart TD
+    subgraph Collect["Stage 1: 采集"]
+        A[APScheduler 触发<br/>分平台独立 cron] --> B[CollectorRegistry]
+        B --> C1[Weibo]
+        B --> C2[Google]
+        B --> C3[TikTok]
+        C1 & C2 & C3 --> D[Replace-by-hour 去重]
+        D --> E[(trends 表)]
     end
 
-    subgraph Normalize["数据标准化"]
-        C1 & C2 & C3 & C4 --> D[TrendItem<br/>统一数据结构]
-        D --> E[(trend_items<br/>写入MySQL)]
+    subgraph Filter["Stage 2: AI 过滤 + 重要性评分"]
+        E --> F[批量取未评分关键词<br/>max 30/batch]
+        F --> G[LLM 过滤+打分<br/>返回 JSON: i/s/r]
+        G --> H[写回 relevance_score<br/>relevance_label<br/>relevance_reason]
     end
 
-    subgraph Process["后处理"]
-        E --> F[计算收敛评分]
-        F --> G[(convergence_scores)]
-        E --> H[AI情感分析]
-        H --> I[更新sentiment字段]
+    subgraph Signal["Stage 3: 信号检测"]
+        H --> I[rank_jump 排名跃升]
+        H --> J[new_entry 新上榜]
+        H --> K[heat_surge 热度飙升]
+        I & J & K --> L[去重 1h 窗口]
+        L --> M[(signal_logs 表)]
     end
 
-    subgraph Brief["每日简报"]
-        G & I --> J[生成每日简报<br/>LLMFactory]
-        J --> K[(daily_briefs)]
-        K --> L[邮件推送]
+    subgraph DeepAnalysis["Stage 4: 深度分析"]
+        M --> N[取 score 最高 Top N]
+        N --> O{24h 内已分析?}
+        O -->|是| P[跳过]
+        O -->|否| Q[SearchFactory.search<br/>获取 Top 5 搜索结果]
+        Q --> R[LLM 深度分析<br/>背景/机会/风险/行动]
+        R --> S[(ai_insights 表<br/>deep_analysis 字段)]
+    end
+
+    subgraph Brief["每日简报 (08:00)"]
+        M --> T[取近24h信号]
+        T --> U[相关性过滤]
+        U --> V[LLM 生成简报]
+        V --> W[(daily_briefs 表)]
+        W --> X[邮件推送]
     end
 ```
 
@@ -110,57 +127,36 @@ flowchart LR
 classDiagram
     class BaseCollector {
         <<abstract>>
-        +name: str
-        +enabled: bool
-        +fetch() List~TrendItem~
-        +health_check() bool
-    }
-
-    class TrendItem {
-        +keyword: str
         +platform: str
-        +score: float
-        +rank: int
-        +collected_at: datetime
-        +raw_data: dict
+        +collect() list~dict~
+        +_now() datetime
     }
 
     class CollectorRegistry {
         -_collectors: dict
         +register(collector)
-        +get_enabled() List
-        +run_all() List~TrendItem~
-    }
-
-    class GoogleCollector {
-        +name = "google"
-        +fetch()
-        +health_check()
-    }
-
-    class TikTokCollector {
-        +name = "tiktok"
-        +fetch()
-        +health_check()
+        +get(slug) type
+        +list_platforms() list
     }
 
     class WeiboCollector {
-        +name = "weibo"
-        +fetch()
-        +health_check()
+        +platform = "weibo"
+        +collect()
     }
 
-    class BaiduCollector {
-        +name = "baidu"
-        +fetch()
-        +health_check()
+    class GoogleCollector {
+        +platform = "google"
+        +collect()
     }
 
+    class TikTokCollector {
+        +platform = "tiktok"
+        +collect()
+    }
+
+    BaseCollector <|-- WeiboCollector
     BaseCollector <|-- GoogleCollector
     BaseCollector <|-- TikTokCollector
-    BaseCollector <|-- WeiboCollector
-    BaseCollector <|-- BaiduCollector
-    BaseCollector ..> TrendItem
     CollectorRegistry o-- BaseCollector
 ```
 
@@ -172,48 +168,81 @@ classDiagram
 classDiagram
     class BaseLLMProvider {
         <<abstract>>
-        +chat(messages) str
-        +analyze_trend(keyword, context) TrendAnalysis
+        +chat(messages, **kwargs) ChatResponse
+        +analyze(keyword, context, insight_type) AnalyzeResponse
     }
 
     class LLMFactory {
-        +create(provider: str) BaseLLMProvider
+        -_PROVIDERS: dict
+        +create(provider_name) BaseLLMProvider
     }
 
     class MiniMaxProvider {
         +model: str
         +api_key: str
         +chat()
-        +analyze_trend()
+        +analyze()
     }
 
-    class DeepSeekProvider {
-        +chat()
-        +analyze_trend()
+    class ChatMessage {
+        +role: str
+        +content: str
     }
 
-    class QwenProvider {
-        +chat()
-        +analyze_trend()
+    class ChatResponse {
+        +content: str
+        +model: str
+        +usage: dict
     }
 
-    class TrendAnalysis {
-        +business_insight: str
-        +opportunities: List
-        +sentiment: str
-        +related_keywords: List
+    class AnalyzeResponse {
+        +insight_type: str
+        +content: str
+        +model: str
+        +extra: dict
     }
 
     BaseLLMProvider <|-- MiniMaxProvider
-    BaseLLMProvider <|-- DeepSeekProvider
-    BaseLLMProvider <|-- QwenProvider
     LLMFactory ..> BaseLLMProvider : creates
-    BaseLLMProvider ..> TrendAnalysis : returns
+    BaseLLMProvider ..> ChatMessage : receives
+    BaseLLMProvider ..> ChatResponse : returns
+    BaseLLMProvider ..> AnalyzeResponse : returns
 ```
 
 ---
 
-## 5. Docker Compose 服务关系
+## 5. 搜索层工厂
+
+```mermaid
+classDiagram
+    class BaseSearchProvider {
+        <<abstract>>
+        +search(query, max_results) list~SearchResult~
+    }
+
+    class SearchFactory {
+        -_PROVIDERS: dict
+        +create(provider_name) BaseSearchProvider
+    }
+
+    class DuckDuckGoProvider {
+        +search(query, max_results)
+    }
+
+    class SearchResult {
+        +title: str
+        +snippet: str
+        +url: str
+    }
+
+    BaseSearchProvider <|-- DuckDuckGoProvider
+    SearchFactory ..> BaseSearchProvider : creates
+    BaseSearchProvider ..> SearchResult : returns
+```
+
+---
+
+## 6. Docker Compose 服务关系
 
 ```mermaid
 graph LR
@@ -227,97 +256,89 @@ graph LR
     FE -->|http://backend:8000| BE
     BE -->|tcp://mysql:3306| DB
 
-    BE -.->|定时采集| Internet[🌐 外部数据源]
-    BE -.->|AI API| LLMAPI[🤖 MiniMax API]
-    BE -.->|SMTP| EmailSrv[📬 邮件服务]
+    BE -.->|定时采集| Internet[外部数据源]
+    BE -.->|AI API| LLMAPI[MiniMax API]
+    BE -.->|搜索| SearchAPI[DuckDuckGo]
+    BE -.->|SMTP| EmailSrv[邮件服务]
 ```
 
 ---
 
-## 6. 数据库 ER 图
+## 7. 数据库 ER 图
 
 ```mermaid
 erDiagram
-    trend_items {
+    platforms {
+        int id PK
+        varchar name
+        varchar slug UK
+    }
+
+    trends {
         bigint id PK
-        varchar keyword
+        int platform_id FK
         varchar platform
-        decimal score
+        varchar keyword
         smallint rank
-        varchar category
-        varchar lifecycle
-        varchar sentiment
-        json raw_data
+        float heat_score
+        varchar url
         datetime collected_at
+        float relevance_score
+        varchar relevance_label
+        varchar relevance_reason
     }
 
-    convergence_scores {
+    signal_logs {
         bigint id PK
+        varchar signal_type
+        varchar platform
         varchar keyword
-        decimal score
-        tinyint platform_count
-        json platforms
-        datetime calculated_at
+        varchar description
+        float value
+        varchar ai_summary
+        datetime detected_at
     }
 
-    ai_analyses {
+    ai_insights {
         bigint id PK
         varchar keyword
+        bigint trend_id FK
+        varchar insight_type
+        text content
+        varchar model
+        text search_context
+        text deep_analysis
+        text source_urls
         varchar analysis_type
-        varchar provider
-        text business_insight
-        json opportunities
-        varchar sentiment
-        json related_keywords
         datetime created_at
     }
 
     daily_briefs {
         bigint id PK
-        date brief_date
-        json top_trends
-        text summary
-        tinyint is_sent
-        datetime created_at
-    }
-
-    chat_messages {
-        bigint id PK
-        varchar session_id
-        varchar role
+        date date UK
         text content
+        varchar model
         datetime created_at
     }
 
-    watch_keywords {
+    keyword_alerts {
         bigint id PK
         varchar keyword
-        json platforms
-        varchar threshold_type
-        decimal threshold_value
+        float threshold
+        varchar email
         tinyint is_active
-        datetime created_at
     }
 
     alert_logs {
         bigint id PK
-        bigint watch_keyword_id FK
+        bigint alert_id FK
         varchar keyword
-        decimal trigger_value
-        tinyint is_notified
-        datetime created_at
-    }
-
-    collect_logs {
-        bigint id PK
         varchar platform
-        varchar status
-        int items_count
-        text error_msg
-        datetime started_at
+        float heat_score
+        tinyint notified
     }
 
-    watch_keywords ||--o{ alert_logs : "触发"
-    trend_items }o--o{ convergence_scores : "keyword关联"
-    trend_items }o--o{ ai_analyses : "keyword关联"
+    platforms ||--o{ trends : "has"
+    trends }o--o| ai_insights : "trend_id"
+    keyword_alerts ||--o{ alert_logs : "triggers"
 ```

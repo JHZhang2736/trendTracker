@@ -20,8 +20,11 @@ async def _score_new_keywords(
     db: AsyncSession,
     hour_start: datetime,
     hour_end: datetime,
-) -> None:
-    """Score newly collected keywords for personal relevance via AI."""
+) -> dict[str, dict]:
+    """Score newly collected keywords for personal relevance via AI.
+
+    Returns the scores dict for use by downstream pipeline stages (e.g. deep analysis).
+    """
     from app.config import settings as app_settings
     from app.services.relevance import score_relevance
 
@@ -35,7 +38,7 @@ async def _score_new_keywords(
     )
     trends = result.scalars().all()
     if not trends:
-        return
+        return {}
 
     # Deduplicate keywords for the API call (preserve insertion order)
     seen: set[str] = set()
@@ -50,7 +53,7 @@ async def _score_new_keywords(
         scores = await score_relevance(unique_keywords, app_settings.user_profile)
     except Exception:
         logger.exception("Relevance scoring failed, skipping")
-        return
+        return {}
 
     # Apply scores back to trend records
     unmatched = set()
@@ -59,6 +62,7 @@ async def _score_new_keywords(
         if info:
             trend.relevance_score = info["score"]
             trend.relevance_label = info["label"]
+            trend.relevance_reason = info.get("reason", "")
         else:
             unmatched.add(trend.keyword)
 
@@ -76,6 +80,7 @@ async def _score_new_keywords(
         relevant_count,
         len(trends),
     )
+    return scores
 
 
 async def _ensure_platform(db: AsyncSession, slug: str) -> int:
@@ -166,8 +171,9 @@ async def run_all_collectors(
     # AI relevance scoring for newly collected keywords
     from app.config import settings as app_settings
 
+    relevance_scores: dict[str, dict] = {}
     if app_settings.relevance_filter_enabled and total_records > 0:
-        await _score_new_keywords(db, hour_start, hour_end)
+        relevance_scores = await _score_new_keywords(db, hour_start, hour_end)
 
     # Check keyword alert thresholds after each collection run
     from app.services.alerts import check_alerts
@@ -184,5 +190,11 @@ async def run_all_collectors(
 
     if signals and settings.signal_auto_analyze_limit > 0:
         await auto_analyze_signals(db, signals, limit=settings.signal_auto_analyze_limit)
+
+    # Auto deep analysis on highest-scored keywords (Stage 3)
+    if relevance_scores and settings.deep_analysis_auto_limit > 0:
+        from app.services.deep_analysis import auto_deep_analyze
+
+        await auto_deep_analyze(db, relevance_scores, limit=settings.deep_analysis_auto_limit)
 
     return {"status": "ok", "records_count": total_records, "platforms": platform_results}

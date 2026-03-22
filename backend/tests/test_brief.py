@@ -13,7 +13,6 @@ from app.ai.base import ChatResponse
 from app.models.daily_brief import DailyBrief
 from app.models.trend import Trend
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

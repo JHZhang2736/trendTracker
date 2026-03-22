@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.trend import Trend
 from app.services.trends import compute_convergence_score
 
-
 # ---------------------------------------------------------------------------
 # Unit tests: compute_convergence_score (pure function)
 # ---------------------------------------------------------------------------

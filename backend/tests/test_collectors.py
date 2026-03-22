@@ -7,7 +7,6 @@ from app.collectors.base import BaseCollector
 from app.collectors.registry import CollectorRegistry
 from app.collectors.weibo_mock import WeiboMockCollector
 
-
 # ---------------------------------------------------------------------------
 # BaseCollector — abstract interface
 # ---------------------------------------------------------------------------

@@ -22,6 +22,30 @@ class AnalyzeResult(BaseModel):
     created_at: datetime
 
 
+class DeepAnalysisRequest(BaseModel):
+    keyword: str
+
+
+class DeepAnalysisContent(BaseModel):
+    background: str = ""
+    opportunity: str = ""
+    risk: str = ""
+    action: str = ""
+    sentiment: Literal["positive", "negative", "neutral"] = "neutral"
+
+
+class DeepAnalysisResponse(BaseModel):
+    id: int
+    keyword: str
+    deep_analysis: DeepAnalysisContent
+    source_urls: list[str]
+    search_results_count: int
+    analysis_type: str | None
+    model: str | None
+    created_at: datetime | None
+    cached: bool
+
+
 class BriefResponse(BaseModel):
     id: int
     date: date

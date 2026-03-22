@@ -6,9 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.ai import AnalyzeRequest, AnalyzeResult, BriefResponse
+from app.schemas.ai import (
+    AnalyzeRequest,
+    AnalyzeResult,
+    BriefResponse,
+    DeepAnalysisRequest,
+    DeepAnalysisResponse,
+)
 from app.services.ai import analyze_keyword
 from app.services.brief import generate_daily_brief, get_latest_brief
+from app.services.deep_analysis import deep_analyze_keyword, get_deep_analysis
 
 router = APIRouter()
 
@@ -28,6 +35,42 @@ async def analyze(
     Result is persisted to the ``ai_insights`` table.
     """
     return await analyze_keyword(keyword=body.keyword, db=db)
+
+
+@router.post(
+    "/deep-analyze",
+    summary="深度分析（搜索+AI），24h去重",
+    response_model=DeepAnalysisResponse,
+)
+async def deep_analyze(
+    body: DeepAnalysisRequest,
+    db: AsyncSession = Depends(get_db),
+) -> DeepAnalysisResponse:
+    """Perform deep analysis on a keyword: web search + LLM structured report.
+
+    If the keyword was analyzed within the last 24 hours, returns the cached
+    result without re-running the analysis.
+    """
+    result = await deep_analyze_keyword(keyword=body.keyword, db=db, analysis_type="manual")
+    if result is None:
+        raise HTTPException(status_code=500, detail="Deep analysis failed")
+    return DeepAnalysisResponse(**result)
+
+
+@router.get(
+    "/deep-analyze/{keyword}",
+    summary="获取深度分析结果",
+    response_model=DeepAnalysisResponse,
+)
+async def get_deep_analyze(
+    keyword: str,
+    db: AsyncSession = Depends(get_db),
+) -> DeepAnalysisResponse:
+    """Retrieve the most recent deep analysis for a keyword."""
+    result = await get_deep_analysis(keyword=keyword, db=db)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No deep analysis found for this keyword")
+    return DeepAnalysisResponse(**result)
 
 
 @router.post("/brief", summary="手动触发每日简报生成", response_model=BriefResponse)

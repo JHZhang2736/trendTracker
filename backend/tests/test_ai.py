@@ -12,7 +12,6 @@ from app.ai.base import AnalyzeResponse, BaseLLMProvider, ChatMessage, ChatRespo
 from app.ai.factory import LLMFactory
 from app.ai.minimax_provider import MiniMaxProvider
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

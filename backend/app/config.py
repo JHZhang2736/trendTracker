@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     minimax_api_key: str = ""
     minimax_group_id: str = ""
 
+    # Search (for deep analysis)
+    search_provider: str = "duckduckgo"
+
+    # Deep analysis
+    deep_analysis_auto_limit: int = 3  # auto-analyze top N after collection
+    deep_analysis_cooldown_hours: int = 24  # skip re-analysis within this window
+
     # Scheduler — global default and per-platform overrides
     collect_cron: str = "0 6 * * *"
     weibo_cron: str = "0 */2 * * *"  # every 2 hours (hot search has short half-life)

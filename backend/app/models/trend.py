@@ -28,6 +28,7 @@ class Trend(Base):
     url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     relevance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     relevance_label: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    relevance_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     platform_rel: Mapped[Optional[Platform]] = relationship("Platform", back_populates="trends")
     ai_insights: Mapped[list[AIInsight]] = relationship("AIInsight", back_populates="trend")

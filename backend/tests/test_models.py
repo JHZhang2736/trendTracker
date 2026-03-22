@@ -1,5 +1,4 @@
 """Tests for SQLAlchemy model definitions (import and attribute checks)."""
-import pytest
 
 from app.models import (
     AIInsight,
