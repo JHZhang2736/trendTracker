@@ -26,4 +26,11 @@ async def get_system_config() -> dict:
         "scheduler": {
             "collect_cron": settings.collect_cron,
         },
+        "email": {
+            "configured": bool(
+                settings.smtp_user and settings.smtp_password and settings.alert_email_to
+            ),
+            "smtp_host": settings.smtp_host,
+            "recipient": settings.alert_email_to or None,
+        },
     }
