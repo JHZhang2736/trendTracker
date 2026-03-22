@@ -313,10 +313,14 @@ async def test_auto_analyze_updates_ai_summary(db_session: AsyncSession):
     signals = await detect_signals(db_session)
     assert len(signals) >= 1
 
-    mock_result = AsyncMock()
-    mock_result.business_insight = "这是一个有商业价值的趋势"
+    from app.ai.base import ChatResponse
 
-    with patch("app.services.ai.analyze_keyword", new=AsyncMock(return_value=mock_result)):
+    mock_provider = AsyncMock()
+    mock_provider.chat = AsyncMock(
+        return_value=ChatResponse(content="这是一个有商业价值的趋势", model="test")
+    )
+
+    with patch("app.ai.factory.LLMFactory.create", return_value=mock_provider):
         analyzed = await auto_analyze_signals(db_session, signals, limit=1)
 
     assert analyzed == 1
@@ -340,12 +344,15 @@ async def test_auto_analyze_respects_limit(db_session: AsyncSession):
     signals = await detect_signals(db_session)
     assert len(signals) >= 3
 
-    mock_result = AsyncMock()
-    mock_result.business_insight = "分析结果"
-    mock_analyze = AsyncMock(return_value=mock_result)
+    from app.ai.base import ChatResponse
 
-    with patch("app.services.ai.analyze_keyword", new=mock_analyze):
+    mock_provider = AsyncMock()
+    mock_provider.chat = AsyncMock(
+        return_value=ChatResponse(content="分析结果", model="test")
+    )
+
+    with patch("app.ai.factory.LLMFactory.create", return_value=mock_provider):
         analyzed = await auto_analyze_signals(db_session, signals, limit=2)
 
     assert analyzed == 2
-    assert mock_analyze.call_count == 2
+    assert mock_provider.chat.call_count == 2

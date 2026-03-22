@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import ai as ai_router
-from app.routers import alerts as alerts_router
 from app.routers import collector as collector_router
 from app.routers import scheduler as scheduler_router
 from app.routers import signals as signals_router
@@ -52,6 +51,5 @@ app.include_router(scheduler_router.router, prefix="/api/v1/scheduler", tags=["S
 app.include_router(collector_router.router, prefix="/api/v1/collector", tags=["Collector"])
 app.include_router(trends_router.router, prefix="/api/v1/trends", tags=["Trends"])
 app.include_router(ai_router.router, prefix="/api/v1/ai", tags=["AI"])
-app.include_router(alerts_router.router, prefix="/api/v1/alerts", tags=["Alerts"])
 app.include_router(signals_router.router, prefix="/api/v1/signals", tags=["Signals"])
 app.include_router(system_router.router, prefix="/api/v1/system", tags=["System"])

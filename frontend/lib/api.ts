@@ -70,16 +70,6 @@ export interface HeatmapResponse {
   max_heat: number
 }
 
-export interface AnalyzeResult {
-  id: number
-  keyword: string
-  business_insight: string
-  sentiment: "positive" | "negative" | "neutral"
-  related_keywords: string[]
-  model: string | null
-  created_at: string
-}
-
 export interface OpportunityAngle {
   angle: string
   idea: string
@@ -113,22 +103,8 @@ export interface BriefResponse {
   created_at: string
 }
 
-export interface AlertRule {
-  id: number
-  keyword: string
-  threshold: number
-  notify_email: string | null
-  is_active: boolean
-  created_at: string
-}
-
-export interface AlertRulesResponse {
-  items: AlertRule[]
-}
-
 export interface SystemConfig {
   ai: { provider: string; configured: boolean }
-  email: { configured: boolean; smtp_host: string; smtp_port: number; notify_email: string | null }
   tiktok: { configured: boolean }
   scheduler: { collect_cron: string }
 }
@@ -187,11 +163,6 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   health: () => request<HealthStatus>("/health"),
   ai: {
-    analyze: (keyword: string) =>
-      request<AnalyzeResult>("/api/v1/ai/analyze", {
-        method: "POST",
-        body: JSON.stringify({ keyword }),
-      }),
     deepAnalyze: (keyword: string) =>
       request<DeepAnalysisResponse>("/api/v1/ai/deep-analyze", {
         method: "POST",
@@ -202,14 +173,6 @@ export const api = {
     latestBrief: () => request<BriefResponse>("/api/v1/ai/brief/latest"),
     generateBrief: () =>
       request<BriefResponse>("/api/v1/ai/brief", { method: "POST" }),
-  },
-  alerts: {
-    listRules: () => request<AlertRulesResponse>("/api/v1/alerts/keywords"),
-    createRule: (keyword: string, threshold: number, notify_email: string) =>
-      request<AlertRule>("/api/v1/alerts/keywords", {
-        method: "POST",
-        body: JSON.stringify({ keyword, threshold, notify_email }),
-      }),
   },
   scheduler: {
     status: () => request<SchedulerStatus>("/api/v1/scheduler/status"),

@@ -431,3 +431,36 @@
 - 相关性 prompt 改为商业行动导向评分标准
 - 验证：「双汇火腿钢钉」→ irrelevant，「拼豆手工爆火」→ relevant(70)
 - PR #83 → 已合并
+
+---
+
+**用户**：你的搜索链路是不是有问题，经常搜索到跟标题没有关系的文章，比如苍兰绝搜出来的都是instagram的内容，有的关键词却搜到0篇文章
+**AI**：DuckDuckGo 中文覆盖差，建议换 Google 或 Bing
+
+**用户**：或许在google搜索呢
+**AI**：添加 GoogleProvider，但测试发现中国网络 Google 被重定向到 .com.hk，JS 渲染页面无法爬取
+
+**用户**：直接加上googlesearch 爬虫支持，不需要修改DuckDuckgo
+
+**用户**：那就Bing把
+**AI**：实现 BingProvider（scrape www.bing.com, mkt=zh-CN），4个新测试
+
+**Issue #85 — Bing 搜索 Provider**
+- 新增 `app/search/bing.py`（BingProvider），`app/search/google.py`（GoogleProvider 备用）
+- SearchFactory 注册 bing + google
+- `.env.example` 默认 `SEARCH_PROVIDER=bing`
+- PR #85 → 已合并
+
+---
+
+**用户**：删除告警监控以及AI洞察中的关键词分析部分
+
+**Issue #86 — 删除告警监控 + AI关键词分析**
+- 删除告警全部代码：models(keyword_alert/alert_log), services(alerts/email), routers, schemas, tests, 前端 alerts 页面
+- 删除 AI 关键词分析：services/ai.py, analyze endpoint, AnalyzeRequest/Result schemas, analyze prompt
+- 移除 SMTP 配置（config.py, .env.example）
+- 信号 auto_analyze 改用直接 LLM chat 替代 analyze_keyword
+- 前端：移除告警导航、仪表盘告警卡、设置页邮件区、AI页关键词分析区
+- 保留：深度分析、每日简报、信号检测
+- 232 测试全部通过
+- PR #86 → 待合并

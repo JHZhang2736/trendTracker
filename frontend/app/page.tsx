@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BarChart3, Brain, Bell, Database, Zap, ChevronDown, ChevronUp } from "lucide-react"
+import { BarChart3, Brain, Database, Zap, ChevronDown, ChevronUp } from "lucide-react"
 import { api, type HealthStatus, type PlatformTrendItem, type BriefResponse, type SignalItem } from "@/lib/api"
 import { TopKeywordsChart } from "@/components/TopKeywordsChart"
 import { getPlatformMeta } from "@/lib/platform-config"
@@ -72,7 +72,6 @@ export default function DashboardPage() {
   const [healthError, setHealthError] = useState(false)
 
   const [totalTrends, setTotalTrends] = useState<number | null>(null)
-  const [alertCount, setAlertCount] = useState<number | null>(null)
   const [brief, setBrief] = useState<BriefResponse | null>(null)
 
   const [platformTrends, setPlatformTrends] = useState<Record<string, PlatformTrendItem[]>>({})
@@ -88,11 +87,6 @@ export default function DashboardPage() {
       .count()
       .then((d) => setTotalTrends(d.total))
       .catch(() => setTotalTrends(null))
-
-    api.alerts
-      .listRules()
-      .then((d) => setAlertCount(d.items.length))
-      .catch(() => setAlertCount(null))
 
     api.ai
       .latestBrief()
@@ -144,7 +138,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">热词总数</CardTitle>
@@ -189,21 +183,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">
               {brief ? "AI 简报已生成" : "尚未生成今日简报"}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">告警规则</CardTitle>
-            <Bell className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {alertCount === null ? (
-              <Skeleton className="h-8 w-12" />
-            ) : (
-              <div className="text-2xl font-bold">{alertCount}</div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">活跃监控规则</p>
           </CardContent>
         </Card>
 

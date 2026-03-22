@@ -259,10 +259,20 @@ async def auto_analyze_signals(db: AsyncSession, signals: list[SignalLog], limit
     analyzed = 0
     for sig in ranked:
         try:
-            from app.services.ai import analyze_keyword
+            from app.ai.base import ChatMessage
+            from app.ai.factory import LLMFactory
 
-            result = await analyze_keyword(keyword=sig.keyword, db=db)
-            sig.ai_summary = result.business_insight[:500] if result.business_insight else None
+            provider = LLMFactory.create()
+            resp = await provider.chat(
+                [
+                    ChatMessage(
+                        role="system",
+                        content="你是商业趋势分析专家。用一句话概括这个热词的商业意义，50字以内。",
+                    ),
+                    ChatMessage(role="user", content=f"热词：{sig.keyword}"),
+                ]
+            )
+            sig.ai_summary = resp.content[:500] if resp.content else None
             analyzed += 1
             logger.info("auto_analyze_signals: analyzed %r (%s)", sig.keyword, sig.signal_type)
         except Exception as exc:  # noqa: BLE001

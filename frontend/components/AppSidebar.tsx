@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, Brain, Bell, LayoutDashboard, Search, Settings } from "lucide-react"
+import { BarChart3, Brain, LayoutDashboard, Search, Settings } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import {
   Sidebar,
@@ -21,7 +21,6 @@ const navItems: { title: string; href: string; icon: LucideIcon }[] = [
   { title: "趋势列表", href: "/trends", icon: BarChart3 },
   { title: "AI 洞察", href: "/ai", icon: Brain },
   { title: "深度分析", href: "/deep-analysis", icon: Search },
-  { title: "告警监控", href: "/alerts", icon: Bell },
   { title: "系统设置", href: "/settings", icon: Settings },
 ]
 

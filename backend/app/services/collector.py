@@ -175,11 +175,6 @@ async def run_all_collectors(
     if app_settings.relevance_filter_enabled and total_records > 0:
         relevance_scores = await _score_new_keywords(db, hour_start, hour_end)
 
-    # Check keyword alert thresholds after each collection run
-    from app.services.alerts import check_alerts
-
-    await check_alerts(db)
-
     # Detect trend signals (rank jumps, new entries, heat surges)
     from app.services.signals import auto_analyze_signals, detect_signals
 

@@ -45,7 +45,7 @@ async def daily_brief_job() -> None:
         async with AsyncSessionLocal() as db:
             from app.services.brief import generate_daily_brief
 
-            brief = await generate_daily_brief(db=db, send_mail=True)
+            brief = await generate_daily_brief(db=db)
             logger.info("daily_brief_job: brief generated id=%d date=%s", brief.id, brief.date)
     except Exception as exc:  # noqa: BLE001
         logger.error("daily_brief_job: error — %s", exc)
