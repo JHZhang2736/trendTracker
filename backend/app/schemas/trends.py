@@ -60,6 +60,19 @@ class HeatmapResponse(BaseModel):
     max_heat: float
 
 
+class VelocityItem(BaseModel):
+    platform: str
+    keyword: str
+    heat_score: float
+    rank: int | None
+    velocity: float | None
+    acceleration: float | None
+
+
+class VelocityResponse(BaseModel):
+    items: list[VelocityItem]
+
+
 class TrendsClearResponse(BaseModel):
     deleted: int
 

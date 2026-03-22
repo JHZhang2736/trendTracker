@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { TrendingUp, ExternalLink, Flame, RefreshCw } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, ExternalLink, Flame, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api, type TrendItem } from "@/lib/api"
+import { api, type TrendItem, type VelocityItem } from "@/lib/api"
 import { PLATFORM_CONFIG, getPlatformMeta } from "@/lib/platform-config"
 
 function formatHeat(score: number | null): string {
@@ -25,7 +25,47 @@ function formatTime(iso: string): string {
   })
 }
 
-function TrendRow({ item, index }: { item: TrendItem; index: number }) {
+function VelocityBadge({ velocity, acceleration }: { velocity: number | null; acceleration: number | null }) {
+  if (velocity === null || velocity === 0) {
+    return (
+      <span className="flex items-center gap-0.5 text-xs text-muted-foreground w-16 justify-end" title="velocity: 0%">
+        <Minus className="w-3 h-3" />
+        <span className="font-mono">0%</span>
+      </span>
+    )
+  }
+
+  const isUp = velocity > 0
+  const Icon = isUp ? TrendingUp : TrendingDown
+  const color = isUp ? "text-red-500" : "text-green-600"
+  const absVal = Math.abs(velocity)
+  const display = absVal >= 100 ? `${Math.round(absVal)}%` : `${absVal.toFixed(1)}%`
+
+  let accelIndicator = ""
+  if (acceleration !== null) {
+    if (acceleration > 5) accelIndicator = " \u2191\u2191"
+    else if (acceleration < -5) accelIndicator = " \u2193\u2193"
+  }
+
+  const title = `velocity: ${isUp ? "+" : ""}${velocity.toFixed(1)}%${acceleration !== null ? `, accel: ${acceleration.toFixed(1)}` : ""}`
+
+  return (
+    <span className={`flex items-center gap-0.5 text-xs font-mono w-16 justify-end ${color}`} title={title}>
+      <Icon className="w-3 h-3 shrink-0" />
+      <span>{isUp ? "+" : "-"}{display}{accelIndicator}</span>
+    </span>
+  )
+}
+
+function TrendRow({
+  item,
+  index,
+  velocityData,
+}: {
+  item: TrendItem
+  index: number
+  velocityData?: VelocityItem
+}) {
   const rankDisplay = index + 1
   const isHot = rankDisplay <= 3
 
@@ -54,6 +94,10 @@ function TrendRow({ item, index }: { item: TrendItem; index: number }) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        <VelocityBadge
+          velocity={velocityData?.velocity ?? null}
+          acceleration={velocityData?.acceleration ?? null}
+        />
         <span className="text-xs font-mono text-muted-foreground w-12 text-right">
           {formatHeat(item.heat_score)}
         </span>
@@ -82,12 +126,21 @@ function TrendRowSkeleton() {
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-3 w-20" />
       </div>
+      <Skeleton className="w-16 h-4" />
       <Skeleton className="w-12 h-4" />
     </div>
   )
 }
 
-function PlatformCard({ slug, refreshKey }: { slug: string; refreshKey: number }) {
+function PlatformCard({
+  slug,
+  refreshKey,
+  velocityMap,
+}: {
+  slug: string
+  refreshKey: number
+  velocityMap: Record<string, VelocityItem>
+}) {
   const [items, setItems] = useState<TrendItem[]>([])
   const [loading, setLoading] = useState(true)
   const meta = getPlatformMeta(slug)
@@ -129,7 +182,12 @@ function PlatformCard({ slug, refreshKey }: { slug: string; refreshKey: number }
             </div>
           ) : (
             items.map((item, i) => (
-              <TrendRow key={`${item.keyword}-${i}`} item={item} index={i} />
+              <TrendRow
+                key={`${item.keyword}-${i}`}
+                item={item}
+                index={i}
+                velocityData={velocityMap[`${slug}:${item.keyword}`]}
+              />
             ))
           )}
         </div>
@@ -143,6 +201,20 @@ const PLATFORMS = Object.keys(PLATFORM_CONFIG)
 export default function TrendsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [velocityMap, setVelocityMap] = useState<Record<string, VelocityItem>>({})
+
+  useEffect(() => {
+    api.trends
+      .velocity(undefined, 24, 200)
+      .then((res) => {
+        const map: Record<string, VelocityItem> = {}
+        for (const item of res.items) {
+          map[`${item.platform}:${item.keyword}`] = item
+        }
+        setVelocityMap(map)
+      })
+      .catch(() => setVelocityMap({}))
+  }, [refreshKey])
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -178,7 +250,7 @@ export default function TrendsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {PLATFORMS.map((slug) => (
-          <PlatformCard key={slug} slug={slug} refreshKey={refreshKey} />
+          <PlatformCard key={slug} slug={slug} refreshKey={refreshKey} velocityMap={velocityMap} />
         ))}
       </div>
     </div>
