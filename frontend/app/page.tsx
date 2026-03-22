@@ -4,8 +4,8 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BarChart3, Brain, Bell, Database } from "lucide-react"
-import { api, type HealthStatus, type PlatformTrendItem, type BriefResponse } from "@/lib/api"
+import { BarChart3, Brain, Bell, Database, Zap } from "lucide-react"
+import { api, type HealthStatus, type PlatformTrendItem, type BriefResponse, type SignalItem } from "@/lib/api"
 import { TopKeywordsChart } from "@/components/TopKeywordsChart"
 import { getPlatformMeta } from "@/lib/platform-config"
 
@@ -19,6 +19,9 @@ export default function DashboardPage() {
 
   const [platformTrends, setPlatformTrends] = useState<Record<string, PlatformTrendItem[]>>({})
   const [trendsLoading, setTrendsLoading] = useState(true)
+
+  const [signals, setSignals] = useState<SignalItem[]>([])
+  const [signalsLoading, setSignalsLoading] = useState(true)
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealthError(true))
@@ -43,6 +46,12 @@ export default function DashboardPage() {
       .then((d) => setPlatformTrends(d.platforms))
       .catch(() => setPlatformTrends({}))
       .finally(() => setTrendsLoading(false))
+
+    api.signals
+      .recent(24, 20)
+      .then((d) => setSignals(d.items))
+      .catch(() => setSignals([]))
+      .finally(() => setSignalsLoading(false))
   }, [])
 
   const platformEntries = Object.entries(platformTrends)
@@ -77,7 +86,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">热词总数</CardTitle>
@@ -139,7 +148,83 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">活跃监控规则</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">趋势信号</CardTitle>
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {signalsLoading ? (
+              <Skeleton className="h-8 w-12" />
+            ) : (
+              <div className="text-2xl font-bold">{signals.length}</div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">近24小时检测到</p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Trend Signals */}
+      {signalsLoading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              趋势信号（近24小时）
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="w-full h-32" />
+          </CardContent>
+        </Card>
+      ) : signals.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              趋势信号（近24小时）
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {signals.map((sig) => {
+                const meta = getPlatformMeta(sig.platform)
+                const typeLabel =
+                  sig.signal_type === "rank_jump"
+                    ? "排名跃升"
+                    : sig.signal_type === "new_entry"
+                      ? "新面孔"
+                      : "热度突增"
+                const typeColor =
+                  sig.signal_type === "rank_jump"
+                    ? "bg-blue-100 text-blue-800"
+                    : sig.signal_type === "new_entry"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                return (
+                  <div
+                    key={sig.id}
+                    className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
+                  >
+                    <Badge variant="outline" className={typeColor}>
+                      {typeLabel}
+                    </Badge>
+                    <span
+                      className="inline-block w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: meta.color }}
+                    />
+                    <span className="font-medium truncate">{sig.keyword}</span>
+                    <span className="text-muted-foreground text-xs ml-auto shrink-0">
+                      {sig.description}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Per-Platform Top Keywords */}
       {trendsLoading ? (

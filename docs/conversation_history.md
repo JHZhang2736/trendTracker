@@ -201,3 +201,38 @@
 - 后端新增 `GET /api/v1/trends/count` 全量计数端点（`get_total_count` service）
 - 前端 `api.ts` 添加 `cache: "no-store"` 禁用 fetch 缓存
 - 仪表盘改用 `api.trends.count()` 获取真实总数
+
+---
+
+## 2026-03-22
+
+---
+
+**[用户]** 请你阅读一下这个项目中重要的文档文件
+
+**[AI]** 阅读了 docs/ 下全部 7 个文档（PRD/TECH/ARCHITECTURE/DEV_WORKFLOW/DATABASE/API/TODO）+ conversation_history.md，给出项目状态概览。
+
+---
+
+**[用户]** 你是一个资深的 agent 系统架构师，对网页爬虫和情报分析有深厚理解。读完系统设计后，识别架构/UX漏洞；对比 API 固定采集 vs Agent 自主爬取的效果
+
+**[AI]** 分析了6个架构/UX漏洞：①趋势速度盲区（缺少变化率/加速度）②收敛评分设计自相矛盾 ③采集频率与趋势生命周期不匹配 ④缺少信号提取层 ⑤AI分析是被动的 ⑥前端UX缺陷（无搜索/对比/导出）。API vs Agent 对比：建议混合架构，固定 Collector 用于已有 API 的数据源，Agent 用于无 API 数据源（百度指数）、二级情报深挖、API 断裂时的 Fallback。
+
+---
+
+**[用户]** 哪个点对于现在的系统架构更容易改进
+
+**[AI]** 信号提取层最容易——现有 check_alerts 的模式可以直接复制，只需1个新 service + collector.py 加1行。
+
+---
+
+**[用户]** 那你开始实现把，记得使用issue开发流程
+
+**[AI]** 创建 Issue #62，分支 feature/issue-62-signal-detection，实现：
+- 新增 SignalLog 模型（signal_logs 表）
+- 新增 services/signals.py，检测三类信号：rank_jump / new_entry / heat_surge
+- 串联到 run_all_collectors() post-collection 管线
+- 新增 GET /api/v1/signals/recent 和 POST /api/v1/signals/detect 接口
+- 前端仪表盘新增"趋势信号"统计卡片和信号列表
+- 15个单元测试 + 全量208测试通过
+- PR #63: https://github.com/JHZhang2736/trendTracker/pull/63

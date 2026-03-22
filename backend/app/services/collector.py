@@ -97,4 +97,9 @@ async def run_all_collectors(db: AsyncSession) -> dict:
 
     await check_alerts(db)
 
+    # Detect trend signals (rank jumps, new entries, heat surges)
+    from app.services.signals import detect_signals
+
+    await detect_signals(db)
+
     return {"status": "ok", "records_count": total_records, "platforms": platform_results}
