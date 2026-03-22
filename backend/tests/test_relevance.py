@@ -67,6 +67,18 @@ def test_parse_index_based_matching():
     assert result["某明星离婚"]["label"] == "irrelevant"
 
 
+def test_parse_compact_format():
+    """LLM returns compact keys (i, l, s) — should parse correctly."""
+    content = json.dumps([
+        {"i": 1, "l": "relevant", "s": 85},
+        {"i": 2, "l": "irrelevant", "s": 10},
+    ])
+    result = _parse_response(content, ["比特币暴涨", "某综艺开播"])
+    assert result["比特币暴涨"]["label"] == "relevant"
+    assert result["比特币暴涨"]["score"] == 85.0
+    assert result["某综艺开播"]["label"] == "irrelevant"
+
+
 def test_parse_fuzzy_keyword_matching():
     """LLM returns slightly different keyword — should fuzzy match."""
     content = json.dumps([

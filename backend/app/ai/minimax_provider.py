@@ -44,10 +44,13 @@ class MiniMaxProvider(BaseLLMProvider):
 
     async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> ChatResponse:
         """Send messages to MiniMax ChatCompletion V2 and return the reply."""
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "max_tokens": kwargs.get("max_tokens", 2048),
         }
+        if "temperature" in kwargs:
+            payload["temperature"] = kwargs["temperature"]
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(_API_URL, headers=self._headers(), json=payload)
             resp.raise_for_status()

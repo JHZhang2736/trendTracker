@@ -60,12 +60,11 @@ async def _score_batch(
         "- 情感、家庭、婚恋、八卦\n"
         "- 美食、旅游、生活方式（除非涉及电商/创业）\n\n"
         f"## 待判断的热搜关键词\n{numbered}\n\n"
-        "## 输出格式\n"
-        "返回 JSON 数组，每项包含:\n"
-        "- index: 序号（1开始）\n"
-        '- label: "relevant" 或 "irrelevant"\n'
-        "- score: 相关性 0-100\n\n"
-        "只返回 JSON 数组，不要其他文字。"
+        "## 输出格式（必须紧凑，不要换行和空格）\n"
+        "返回紧凑JSON数组，示例：\n"
+        '[{"i":1,"l":"relevant","s":80},{"i":2,"l":"irrelevant","s":10}]\n'
+        "字段：i=序号，l=label，s=score(0-100)\n"
+        "只返回JSON，不要其他文字。"
     )
 
     try:
@@ -115,17 +114,16 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
     kw_by_index = {i + 1: kw for i, kw in enumerate(keywords)}
 
     for item in items:
-        # Try index-based matching first (most reliable)
-        idx = item.get("index")
+        # Support both compact ("i","l","s") and full ("index","label","score") keys
+        idx = item.get("i") or item.get("index")
         kw_from_item = item.get("keyword", "")
         matched_kw = None
 
-        if idx is not None and idx in kw_by_index:
-            matched_kw = kw_by_index[idx]
+        if idx is not None and int(idx) in kw_by_index:
+            matched_kw = kw_by_index[int(idx)]
         elif kw_from_item in keywords:
             matched_kw = kw_from_item
         else:
-            # Fuzzy: try to find keyword that contains or is contained by the response
             for orig_kw in keywords:
                 if orig_kw in kw_from_item or kw_from_item in orig_kw:
                     matched_kw = orig_kw
@@ -134,8 +132,8 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
         if matched_kw is None:
             continue
 
-        score = float(item.get("score", 50))
-        label = item.get("label", "")
+        score = float(item.get("s") or item.get("score") or 50)
+        label = item.get("l") or item.get("label") or ""
         if label not in ("relevant", "irrelevant"):
             label = "relevant" if score >= 50 else "irrelevant"
         result[matched_kw] = {"score": min(100.0, max(0.0, score)), "label": label}
