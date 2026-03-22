@@ -382,3 +382,52 @@
 - `CLAUDE.md` — 新增搜索层、AI管线化描述
 - `docs/TODO.md` — 重构待办清单，区分新功能/完善/已完成
 - `.env.example` — 新增 SEARCH_PROVIDER、DEEP_ANALYSIS_AUTO_LIMIT、DEEP_ANALYSIS_COOLDOWN_HOURS
+
+**用户**：我发现趋势列表里的所有的条目都是无关的
+**修复**：MiniMax 对复杂 prompt 返回 `[]`，简化 prompt 格式后恢复正常
+
+**用户**：我能在前端什么位置看到这些分析呢
+**AI**：提出2个方案（嵌入趋势列表 / 独立页面），用户选择独立页面
+
+**用户**：让我看一下你写的关键步骤的提示词
+**AI**：展示相关性评分 prompt 和深度分析 system prompt
+
+**用户**：
+1. 相关性不应仅保留 AI/商业新闻，娱乐趋势如"拼豆"也有电商/内容机会
+2. 深度分析未考虑用户画像（刚毕业、资源有限）
+
+**修复**：
+- 相关性 prompt 改为"用户能否找到商业行动机会"的评判标准
+- 深度分析 system prompt 注入 user_profile，要求结合用户实际情况
+
+**用户**：希望 LLM 从多种角度进行商业分析（技术/产品、市场/变现、内容/传播、商品/营销）
+**修复**：`opportunity` 字段改为 `opportunities` 数组，每条含 angle + idea，向后兼容旧格式
+
+**用户**：user_profile 储存到哪个文件了
+**AI**：存在 `.env` 的 `USER_PROFILE` 配置项中
+
+**用户**：
+1. 深度分析页面默认展开详情
+2. 趋势列表默认已过滤状态
+3. 清空数据库也要清空简报和深度分析
+
+**修复**：前端 `useState(true)` 默认展开、`relevantOnly` 默认 true、清空 API 同时删除 AIInsight/DailyBrief/SignalLog
+
+**用户**：你的网络搜索是在什么平台上用什么关键词搜索的
+**AI**：DuckDuckGo，直接使用热搜关键词原文搜索
+
+**用户**：
+1. 深度分析只有3个，平台增多后怎么决定数量
+2. 关键词商业潜力不够（如"火腿肠钢钉"），需要优化
+
+**AI**：提出两个方案：(1) 固定数改为比例制 (2) 优化 prompt 强调商业行动价值
+
+**用户**：
+1. 可以，固定k值放在配置中
+2. 先仅优化相关 prompt
+
+**Issue #83 — 自动分析比例化 + 相关性 prompt 商业导向优化**
+- `deep_analysis_auto_limit` → `deep_analysis_auto_ratio=0.3` + `deep_analysis_auto_max=10`
+- 相关性 prompt 改为商业行动导向评分标准
+- 验证：「双汇火腿钢钉」→ irrelevant，「拼豆手工爆火」→ relevant(70)
+- PR #83 → 已合并

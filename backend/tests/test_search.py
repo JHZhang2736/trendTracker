@@ -42,6 +42,72 @@ def test_search_factory_creates_duckduckgo(monkeypatch):
     assert provider.provider_name == "duckduckgo"
 
 
+def test_search_factory_creates_bing(monkeypatch):
+    """Factory should create BingProvider when configured."""
+    monkeypatch.setattr("app.search.factory.settings.search_provider", "bing")
+    provider = SearchFactory.create()
+    assert provider.provider_name == "bing"
+
+
+@pytest.mark.asyncio
+async def test_bing_provider_with_mock(monkeypatch):
+    """BingProvider should parse results from mocked HTML."""
+    from app.search.bing import BingProvider
+
+    html = """<html><body>
+    <ol id="b_results">
+      <li class="b_algo">
+        <h2><a href="https://example.com/1">测试标题</a></h2>
+        <p>测试摘要内容</p>
+      </li>
+    </ol>
+    </body></html>"""
+
+    class FakeResp:
+        text = html
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+    import app.search.bing as bing_mod
+
+    monkeypatch.setattr(bing_mod.requests, "get", lambda *a, **kw: FakeResp())
+    provider = BingProvider()
+    results = await provider.search("测试")
+    assert len(results) == 1
+    assert results[0].title == "测试标题"
+    assert results[0].snippet == "测试摘要内容"
+    assert results[0].url == "https://example.com/1"
+
+
+@pytest.mark.asyncio
+async def test_bing_provider_failure(monkeypatch):
+    """BingProvider should return empty list on failure."""
+    from app.search.bing import BingProvider
+
+    def raise_err(*a, **kw):
+        raise ConnectionError("network down")
+
+    import app.search.bing as bing_mod
+
+    monkeypatch.setattr(bing_mod.requests, "get", raise_err)
+    provider = BingProvider()
+    results = await provider.search("测试")
+    assert results == []
+
+
+def test_bing_extract_real_url():
+    """Bing tracking URLs should be decoded to real URLs."""
+    from app.search.bing import _extract_real_url
+
+    # Direct URL — no change
+    assert _extract_real_url("https://example.com") == "https://example.com"
+
+    # Non-bing URL — no change
+    assert _extract_real_url("https://zhihu.com/q/123") == "https://zhihu.com/q/123"
+
+
 @pytest.mark.asyncio
 async def test_mock_search_provider():
     provider = MockSearchProvider()
