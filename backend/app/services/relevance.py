@@ -66,8 +66,8 @@ async def _score_batch(
         return parsed
     except Exception:
         logger.exception("Relevance scoring failed for batch of %d keywords", len(keywords))
-        # On failure, mark all as relevant (don't filter out data)
-        return {kw: {"score": 50.0, "label": "relevant"} for kw in keywords}
+        # On failure, return empty — leave items unscored (no label assigned)
+        return {}
 
 
 def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
@@ -84,8 +84,8 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
     try:
         items = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("Failed to parse relevance response as JSON, marking all as relevant")
-        return {kw: {"score": 50.0, "label": "relevant"} for kw in keywords}
+        logger.warning("Failed to parse relevance response as JSON, leaving unscored")
+        return {}
 
     result: dict[str, dict] = {}
     if isinstance(items, list):
@@ -97,9 +97,5 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
                 label = "relevant" if score >= 50 else "irrelevant"
             result[kw] = {"score": min(100.0, max(0.0, score)), "label": label}
 
-    # Ensure all input keywords have an entry
-    for kw in keywords:
-        if kw not in result:
-            result[kw] = {"score": 50.0, "label": "relevant"}
-
+    # Keywords not in the LLM response are left unscored (no entry)
     return result

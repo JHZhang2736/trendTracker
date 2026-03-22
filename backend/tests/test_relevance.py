@@ -34,17 +34,14 @@ def test_parse_with_code_fences():
 
 def test_parse_invalid_json_fallback():
     result = _parse_response("this is not json", ["kw1", "kw2"])
-    assert result["kw1"]["label"] == "relevant"
-    assert result["kw2"]["label"] == "relevant"
-    assert result["kw1"]["score"] == 50.0
+    assert result == {}
 
 
-def test_parse_missing_keywords_filled():
+def test_parse_missing_keywords_not_filled():
     content = json.dumps([{"keyword": "kw1", "score": 80, "label": "relevant"}])
     result = _parse_response(content, ["kw1", "kw2"])
     assert "kw1" in result
-    assert "kw2" in result
-    assert result["kw2"]["score"] == 50.0
+    assert "kw2" not in result  # LLM didn't return kw2 → left unscored
 
 
 def test_parse_score_clamped():
@@ -99,8 +96,8 @@ async def test_score_relevance_with_mock(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_score_relevance_llm_failure_fallback(monkeypatch):
-    """On LLM failure, all keywords should default to relevant."""
+async def test_score_relevance_llm_failure_returns_empty(monkeypatch):
+    """On LLM failure, return empty dict so items stay unscored."""
 
     class FailProvider:
         async def chat(self, messages, **kwargs):
@@ -112,5 +109,4 @@ async def test_score_relevance_llm_failure_fallback(monkeypatch):
     )
 
     result = await score_relevance(["kw1"], "profile")
-    assert result["kw1"]["label"] == "relevant"
-    assert result["kw1"]["score"] == 50.0
+    assert result == {}
