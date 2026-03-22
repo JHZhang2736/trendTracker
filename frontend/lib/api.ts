@@ -132,6 +132,7 @@ export interface SignalItem {
   keyword: string
   description: string
   value: number | null
+  ai_summary: string | null
   detected_at: string
 }
 

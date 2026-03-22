@@ -12,6 +12,19 @@ from app.services.signals import detect_signals, get_recent_signals
 router = APIRouter()
 
 
+def _to_item(r) -> SignalItem:
+    return SignalItem(
+        id=r.id,
+        signal_type=r.signal_type,
+        platform=r.platform,
+        keyword=r.keyword,
+        description=r.description,
+        value=r.value,
+        ai_summary=r.ai_summary,
+        detected_at=r.detected_at,
+    )
+
+
 @router.get("/recent", summary="获取最近趋势信号", response_model=SignalListResponse)
 async def recent_signals(
     hours: int = Query(24, ge=1, le=168, description="回溯时间窗口（小时）"),
@@ -20,18 +33,7 @@ async def recent_signals(
 ) -> SignalListResponse:
     """Return recent trend signals (rank jumps, new entries, heat surges)."""
     rows = await get_recent_signals(db, hours=hours, limit=limit)
-    items = [
-        SignalItem(
-            id=r.id,
-            signal_type=r.signal_type,
-            platform=r.platform,
-            keyword=r.keyword,
-            description=r.description,
-            value=r.value,
-            detected_at=r.detected_at,
-        )
-        for r in rows
-    ]
+    items = [_to_item(r) for r in rows]
     return SignalListResponse(items=items, total=len(items))
 
 
@@ -41,16 +43,5 @@ async def trigger_detect(
 ) -> DetectResponse:
     """Manually trigger signal detection on current data."""
     signals = await detect_signals(db)
-    items = [
-        SignalItem(
-            id=s.id,
-            signal_type=s.signal_type,
-            platform=s.platform,
-            keyword=s.keyword,
-            description=s.description,
-            value=s.value,
-            detected_at=s.detected_at,
-        )
-        for s in signals
-    ]
+    items = [_to_item(s) for s in signals]
     return DetectResponse(signals_detected=len(items), items=items)

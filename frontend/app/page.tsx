@@ -205,19 +205,26 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={sig.id}
-                    className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
+                    className="rounded-md border px-3 py-2 text-sm space-y-1"
                   >
-                    <Badge variant="outline" className={typeColor}>
-                      {typeLabel}
-                    </Badge>
-                    <span
-                      className="inline-block w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: meta.color }}
-                    />
-                    <span className="font-medium truncate">{sig.keyword}</span>
-                    <span className="text-muted-foreground text-xs ml-auto shrink-0">
-                      {sig.description}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className={typeColor}>
+                        {typeLabel}
+                      </Badge>
+                      <span
+                        className="inline-block w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: meta.color }}
+                      />
+                      <span className="font-medium truncate">{sig.keyword}</span>
+                      <span className="text-muted-foreground text-xs ml-auto shrink-0">
+                        {sig.description}
+                      </span>
+                    </div>
+                    {sig.ai_summary && (
+                      <p className="text-xs text-muted-foreground pl-1 border-l-2 border-blue-200 ml-1">
+                        {sig.ai_summary}
+                      </p>
+                    )}
                   </div>
                 )
               })}

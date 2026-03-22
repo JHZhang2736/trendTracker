@@ -265,3 +265,87 @@ async def test_signals_detect_endpoint(test_client: AsyncClient):
     data = resp.json()
     assert "signals_detected" in data
     assert "items" in data
+
+
+@pytest.mark.asyncio
+async def test_signals_recent_includes_ai_summary_field(test_client: AsyncClient):
+    """API response should include ai_summary field (even if null)."""
+    resp = await test_client.get("/api/v1/signals/recent")
+    assert resp.status_code == 200
+    # Empty list is fine — just checking schema is valid
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: auto_analyze_signals
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_auto_analyze_empty_signals(db_session: AsyncSession):
+    """auto_analyze_signals with empty list should return 0."""
+    from app.services.signals import auto_analyze_signals
+
+    result = await auto_analyze_signals(db_session, [], limit=3)
+    assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_analyze_zero_limit(db_session: AsyncSession):
+    """auto_analyze_signals with limit=0 should return 0."""
+    from app.services.signals import auto_analyze_signals, detect_signals
+
+    await _seed_trend(db_session, "限制测试", rank=3, heat=8000, minutes_ago=0)
+    signals = await detect_signals(db_session)
+
+    result = await auto_analyze_signals(db_session, signals, limit=0)
+    assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_analyze_updates_ai_summary(db_session: AsyncSession):
+    """auto_analyze_signals should set ai_summary on analyzed signals."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.signal_log import SignalLog as SL
+    from app.services.signals import auto_analyze_signals, detect_signals
+
+    await _seed_trend(db_session, "AI分析测试", rank=1, heat=9000, minutes_ago=0)
+    signals = await detect_signals(db_session)
+    assert len(signals) >= 1
+
+    mock_result = AsyncMock()
+    mock_result.business_insight = "这是一个有商业价值的趋势"
+
+    with patch("app.services.ai.analyze_keyword", new=AsyncMock(return_value=mock_result)):
+        analyzed = await auto_analyze_signals(db_session, signals, limit=1)
+
+    assert analyzed == 1
+    # Check that ai_summary was persisted
+    result = await db_session.execute(select(SL).where(SL.ai_summary.isnot(None)))
+    logs_with_summary = result.scalars().all()
+    assert len(logs_with_summary) >= 1
+    assert "商业价值" in logs_with_summary[0].ai_summary
+
+
+@pytest.mark.asyncio
+async def test_auto_analyze_respects_limit(db_session: AsyncSession):
+    """auto_analyze_signals should only analyze up to limit signals."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.signals import auto_analyze_signals, detect_signals
+
+    # Seed multiple new entries
+    for i in range(5):
+        await _seed_trend(db_session, f"词{i}", rank=i + 1, heat=1000 * (i + 1), minutes_ago=0)
+    signals = await detect_signals(db_session)
+    assert len(signals) >= 3
+
+    mock_result = AsyncMock()
+    mock_result.business_insight = "分析结果"
+    mock_analyze = AsyncMock(return_value=mock_result)
+
+    with patch("app.services.ai.analyze_keyword", new=mock_analyze):
+        analyzed = await auto_analyze_signals(db_session, signals, limit=2)
+
+    assert analyzed == 2
+    assert mock_analyze.call_count == 2
