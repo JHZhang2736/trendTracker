@@ -38,8 +38,16 @@ async def _collect_one(platform_slug: str) -> tuple[str, list[dict], str | None]
         return platform_slug, [], str(exc)
 
 
-async def run_all_collectors(db: AsyncSession) -> dict:
-    """Run all registered collectors concurrently, persist results, return summary.
+async def run_all_collectors(
+    db: AsyncSession,
+    platforms: list[str] | None = None,
+) -> dict:
+    """Run collectors concurrently, persist results, return summary.
+
+    Args:
+        db: async database session.
+        platforms: optional list of platform slugs to collect.
+                   If None, all registered platforms are collected.
 
     Each platform uses replace-by-hour semantics: existing records for the same
     platform within the current clock-hour are deleted before inserting the fresh
@@ -49,7 +57,8 @@ async def run_all_collectors(db: AsyncSession) -> dict:
 
     Returns a dict with ``status`` and ``records_count``.
     """
-    platforms = registry.list_platforms()
+    if platforms is None:
+        platforms = registry.list_platforms()
 
     # Current hour bucket (naive UTC, matching DB storage)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
