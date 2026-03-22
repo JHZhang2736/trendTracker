@@ -282,6 +282,108 @@ def get_platforms() -> list[str]:
     return registry.list_platforms()
 
 
+# ---------------------------------------------------------------------------
+# Velocity & Acceleration — trend momentum indicators
+# ---------------------------------------------------------------------------
+
+
+async def get_keyword_velocity(
+    db: AsyncSession,
+    platform: str | None = None,
+    hours: int = 24,
+    limit: int = 50,
+) -> list[dict]:
+    """Compute velocity (heat % change) and acceleration for each keyword.
+
+    Divides the *hours* window into 3 equal periods (T0, T1, T2 = latest).
+    - velocity = (heat_T2 - heat_T1) / max(heat_T1, 1) * 100  (% change)
+    - acceleration = velocity_T2 - velocity_T1
+
+    Returns list sorted by abs(velocity) descending, capped at *limit*.
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    period = timedelta(hours=hours / 3)
+    t0_start = now - timedelta(hours=hours)
+    t1_start = t0_start + period
+    t2_start = t1_start + period
+
+    base = select(
+        Trend.platform,
+        Trend.keyword,
+        Trend.heat_score,
+        Trend.rank,
+        Trend.collected_at,
+    ).where(Trend.collected_at >= t0_start)
+    if platform:
+        base = base.where(Trend.platform == platform)
+
+    result = await db.execute(base)
+    rows = result.all()
+
+    # Bucket rows into 3 periods keyed by (platform, keyword)
+    Key = tuple[str, str]
+    buckets: dict[Key, dict[str, list]] = {}
+    for plat, kw, heat, rank, collected in rows:
+        key: Key = (plat, kw)
+        if key not in buckets:
+            buckets[key] = {"t0": [], "t1": [], "t2": []}
+        collected_naive = _to_naive_utc(collected)
+        if collected_naive < t1_start:
+            buckets[key]["t0"].append((heat or 0.0, rank))
+        elif collected_naive < t2_start:
+            buckets[key]["t1"].append((heat or 0.0, rank))
+        else:
+            buckets[key]["t2"].append((heat or 0.0, rank))
+
+    scored: list[dict] = []
+    for (plat, kw), periods in buckets.items():
+        avg_t0 = _avg_heat(periods["t0"])
+        avg_t1 = _avg_heat(periods["t1"])
+        avg_t2 = _avg_heat(periods["t2"])
+
+        # Need at least T2 data to be meaningful
+        if not periods["t2"]:
+            continue
+
+        vel_t1 = _pct_change(avg_t0, avg_t1)
+        vel_t2 = _pct_change(avg_t1, avg_t2)
+
+        accel = round(vel_t2 - vel_t1, 2) if vel_t1 is not None else None
+
+        # Latest rank from T2
+        latest_rank = periods["t2"][-1][1]
+
+        scored.append(
+            {
+                "platform": plat,
+                "keyword": kw,
+                "heat_score": avg_t2,
+                "rank": latest_rank,
+                "velocity": vel_t2,
+                "acceleration": accel,
+            }
+        )
+
+    scored.sort(key=lambda x: abs(x["velocity"] or 0), reverse=True)
+    return scored[:limit]
+
+
+def _avg_heat(entries: list[tuple[float, int | None]]) -> float:
+    """Average heat score from a list of (heat, rank) tuples."""
+    if not entries:
+        return 0.0
+    return sum(h for h, _ in entries) / len(entries)
+
+
+def _pct_change(old: float, new: float) -> float | None:
+    """Percentage change from old to new. Returns None if old is 0."""
+    if old <= 0:
+        if new > 0:
+            return 100.0  # appeared from nothing → cap at 100%
+        return 0.0
+    return round((new - old) / old * 100, 2)
+
+
 async def get_heatmap(db: AsyncSession) -> dict:
     """Build heatmap data for the last 24 hours, grouped by platform × hour."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)

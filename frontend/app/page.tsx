@@ -4,10 +4,68 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BarChart3, Brain, Bell, Database, Zap } from "lucide-react"
+import { BarChart3, Brain, Bell, Database, Zap, ChevronDown, ChevronUp } from "lucide-react"
 import { api, type HealthStatus, type PlatformTrendItem, type BriefResponse, type SignalItem } from "@/lib/api"
 import { TopKeywordsChart } from "@/components/TopKeywordsChart"
 import { getPlatformMeta } from "@/lib/platform-config"
+
+function SignalCard({ sig }: { sig: SignalItem }) {
+  const [expanded, setExpanded] = useState(false)
+  const meta = getPlatformMeta(sig.platform)
+  const typeLabel =
+    sig.signal_type === "rank_jump"
+      ? "排名跃升"
+      : sig.signal_type === "new_entry"
+        ? "新面孔"
+        : "热度突增"
+  const typeColor =
+    sig.signal_type === "rank_jump"
+      ? "bg-blue-100 text-blue-800"
+      : sig.signal_type === "new_entry"
+        ? "bg-green-100 text-green-800"
+        : "bg-red-100 text-red-800"
+
+  return (
+    <div
+      className="rounded-md border px-3 py-2 text-sm space-y-1 cursor-pointer hover:bg-muted/30 transition-colors"
+      onClick={() => setExpanded((prev) => !prev)}
+    >
+      <div className="flex items-center gap-3">
+        <Badge variant="outline" className={typeColor}>
+          {typeLabel}
+        </Badge>
+        <span
+          className="inline-block w-2 h-2 rounded-full shrink-0"
+          style={{ backgroundColor: meta.color }}
+        />
+        <span className="font-medium truncate">{sig.keyword}</span>
+        <span className="text-muted-foreground text-xs ml-auto shrink-0 flex items-center gap-1">
+          {sig.description}
+          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </span>
+      </div>
+      {expanded && (
+        <div className="space-y-1 pt-1 border-t mt-1">
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>平台: {meta.displayName}</span>
+            <span>数值: {sig.value ?? "—"}</span>
+            <span>时间: {new Date(sig.detected_at).toLocaleString("zh-CN")}</span>
+          </div>
+          {sig.ai_summary && (
+            <p className="text-xs text-muted-foreground pl-1 border-l-2 border-blue-200 ml-1">
+              {sig.ai_summary}
+            </p>
+          )}
+        </div>
+      )}
+      {!expanded && sig.ai_summary && (
+        <p className="text-xs text-muted-foreground pl-1 border-l-2 border-blue-200 ml-1 line-clamp-1">
+          {sig.ai_summary}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
@@ -188,46 +246,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {signals.map((sig) => {
-                const meta = getPlatformMeta(sig.platform)
-                const typeLabel =
-                  sig.signal_type === "rank_jump"
-                    ? "排名跃升"
-                    : sig.signal_type === "new_entry"
-                      ? "新面孔"
-                      : "热度突增"
-                const typeColor =
-                  sig.signal_type === "rank_jump"
-                    ? "bg-blue-100 text-blue-800"
-                    : sig.signal_type === "new_entry"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                return (
-                  <div
-                    key={sig.id}
-                    className="rounded-md border px-3 py-2 text-sm space-y-1"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className={typeColor}>
-                        {typeLabel}
-                      </Badge>
-                      <span
-                        className="inline-block w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: meta.color }}
-                      />
-                      <span className="font-medium truncate">{sig.keyword}</span>
-                      <span className="text-muted-foreground text-xs ml-auto shrink-0">
-                        {sig.description}
-                      </span>
-                    </div>
-                    {sig.ai_summary && (
-                      <p className="text-xs text-muted-foreground pl-1 border-l-2 border-blue-200 ml-1">
-                        {sig.ai_summary}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
+              {signals.map((sig) => (
+                <SignalCard key={sig.id} sig={sig} />
+              ))}
             </div>
           </CardContent>
         </Card>

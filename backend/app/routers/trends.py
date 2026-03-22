@@ -15,9 +15,11 @@ from app.schemas.trends import (
     TrendsClearResponse,
     TrendsCountResponse,
     TrendsListResponse,
+    VelocityResponse,
 )
 from app.services.trends import (
     get_heatmap,
+    get_keyword_velocity,
     get_platforms,
     get_top_trends,
     get_top_trends_by_platform,
@@ -74,6 +76,22 @@ async def trends_heatmap(db: AsyncSession = Depends(get_db)) -> HeatmapResponse:
     """Return heatmap data grouped by platform × hour for the last 24 hours."""
     data = await get_heatmap(db=db)
     return HeatmapResponse(**data)
+
+
+@router.get(
+    "/velocity",
+    summary="获取关键词速度/加速度指标",
+    response_model=VelocityResponse,
+)
+async def keyword_velocity(
+    platform: str | None = Query(default=None, description="按平台过滤"),
+    hours: int = Query(default=24, ge=6, le=72, description="分析时间窗口（小时）"),
+    limit: int = Query(default=50, ge=1, le=200, description="返回条数"),
+    db: AsyncSession = Depends(get_db),
+) -> VelocityResponse:
+    """Return velocity (heat % change) and acceleration for keywords."""
+    items = await get_keyword_velocity(db=db, platform=platform, hours=hours, limit=limit)
+    return VelocityResponse(items=items)
 
 
 @router.get("/count", summary="获取趋势记录总数（全量）", response_model=TrendsCountResponse)

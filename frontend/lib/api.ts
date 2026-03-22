@@ -125,6 +125,19 @@ export interface TrendsCountResponse {
   total: number
 }
 
+export interface VelocityItem {
+  platform: string
+  keyword: string
+  heat_score: number
+  rank: number | null
+  velocity: number | null
+  acceleration: number | null
+}
+
+export interface VelocityResponse {
+  items: VelocityItem[]
+}
+
 export interface SignalItem {
   id: number
   signal_type: "rank_jump" | "new_entry" | "heat_surge"
@@ -183,6 +196,11 @@ export const api = {
     top: (limit = 20) => request<TopTrendsResponse>(`/api/v1/trends/top?limit=${limit}`),
     topByPlatform: (limit = 10) =>
       request<TopByPlatformResponse>(`/api/v1/trends/top-by-platform?limit=${limit}`),
+    velocity: (platform?: string, hours = 24, limit = 50) => {
+      const params = new URLSearchParams({ hours: String(hours), limit: String(limit) })
+      if (platform) params.set("platform", platform)
+      return request<VelocityResponse>(`/api/v1/trends/velocity?${params}`)
+    },
     count: () => request<TrendsCountResponse>("/api/v1/trends/count"),
     clearAll: () => request<TrendsClearResponse>("/api/v1/trends/all", { method: "DELETE" }),
   },
