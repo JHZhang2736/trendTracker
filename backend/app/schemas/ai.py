@@ -26,9 +26,14 @@ class DeepAnalysisRequest(BaseModel):
     keyword: str
 
 
+class OpportunityAngle(BaseModel):
+    angle: str = ""
+    idea: str = ""
+
+
 class DeepAnalysisContent(BaseModel):
     background: str = ""
-    opportunity: str = ""
+    opportunities: list[OpportunityAngle] = []
     risk: str = ""
     action: str = ""
     sentiment: Literal["positive", "negative", "neutral"] = "neutral"

@@ -80,9 +80,14 @@ export interface AnalyzeResult {
   created_at: string
 }
 
+export interface OpportunityAngle {
+  angle: string
+  idea: string
+}
+
 export interface DeepAnalysisContent {
   background: string
-  opportunity: string
+  opportunities: OpportunityAngle[]
   risk: string
   action: string
   sentiment: "positive" | "negative" | "neutral"

@@ -24,18 +24,25 @@ logger = logging.getLogger(__name__)
 
 _DEEP_ANALYSIS_SYSTEM_PROMPT_TEMPLATE = (
     "你是一个资深商业趋势分析师。根据用户提供的热搜关键词和网络搜索结果，"
-    "为用户进行深度商业分析。\n\n"
+    "从多个商业视角为用户分析机会。\n\n"
     "用户画像：{user_profile}\n\n"
     "请结合用户的实际情况（资源、能力、阶段）给出切实可行的建议，"
     "不要建议需要大量资金或资源的方案。\n\n"
     "严格以如下 JSON 格式返回（不要有任何额外文字）：\n"
     "{{\n"
     '  "background": "事件背景，100-200字",\n'
-    '  "opportunity": "结合用户画像的商业机会分析，100-200字",\n'
+    '  "opportunities": [\n'
+    '    {{"angle": "视角名称", "idea": "具体分析，50-100字"}}\n'
+    "  ],\n"
     '  "risk": "潜在风险，50-100字",\n'
-    '  "action": "用户当前可落地的具体行动，50-100字",\n'
+    '  "action": "用户当前最值得尝试的1-2个具体行动，50-100字",\n'
     '  "sentiment": "positive 或 negative 或 neutral"\n'
-    "}}"
+    "}}\n\n"
+    "opportunities 必须包含以下视角（跳过明显不适用的）：\n"
+    "- 技术/产品：能否开发工具、插件、SaaS、小程序\n"
+    "- 内容/传播：能否做自媒体、短视频、教程、知识付费\n"
+    "- 电商/选品：能否在电商平台卖相关产品或服务\n"
+    "- 投资/市场：对投资决策、市场走势有什么启示"
 )
 
 
@@ -238,9 +245,25 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
         if sentiment not in {"positive", "negative", "neutral"}:
             sentiment = "neutral"
 
+        # Normalize opportunities: support both new array and legacy string format
+        raw_opps = parsed.get("opportunities", [])
+        if isinstance(raw_opps, list):
+            opportunities = [
+                {"angle": o.get("angle", ""), "idea": o.get("idea", "")}
+                for o in raw_opps
+                if isinstance(o, dict)
+            ]
+        else:
+            opportunities = []
+
+        # Backward compat: if old "opportunity" string exists and no array
+        legacy_opp = parsed.get("opportunity", "")
+        if not opportunities and legacy_opp:
+            opportunities = [{"angle": "综合", "idea": legacy_opp}]
+
         return {
             "background": parsed.get("background", ""),
-            "opportunity": parsed.get("opportunity", ""),
+            "opportunities": opportunities,
             "risk": parsed.get("risk", ""),
             "action": parsed.get("action", ""),
             "sentiment": sentiment,
@@ -255,12 +278,19 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
 
 def _insight_to_dict(insight: AIInsight, cached: bool = False) -> dict:
     """Convert an AIInsight record to a response dict."""
-    deep = {}
+    deep: dict = {}
     if insight.deep_analysis:
         try:
             deep = json.loads(insight.deep_analysis)
         except json.JSONDecodeError:
             deep = {"background": insight.deep_analysis}
+
+    # Normalize legacy "opportunity" string → "opportunities" array
+    if "opportunity" in deep and "opportunities" not in deep:
+        opp = deep.pop("opportunity", "")
+        deep["opportunities"] = [{"angle": "综合", "idea": opp}] if opp else []
+    if "opportunities" not in deep:
+        deep["opportunities"] = []
 
     source_urls = []
     if insight.source_urls:
