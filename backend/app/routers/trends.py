@@ -111,11 +111,23 @@ async def list_platforms() -> PlatformsResponse:
     return PlatformsResponse(platforms=get_platforms())
 
 
-@router.delete("/all", summary="清空所有趋势数据", response_model=TrendsClearResponse)
+@router.delete(
+    "/all",
+    summary="清空所有数据（趋势+分析+简报+信号）",
+    response_model=TrendsClearResponse,
+)
 async def clear_all_trends(db: AsyncSession = Depends(get_db)) -> TrendsClearResponse:
-    """Delete every trend record from the database. This action is irreversible."""
+    """Delete all trend records, AI insights, daily briefs, and signal logs."""
     from sqlalchemy import delete as sql_delete
 
+    from app.models.ai_insight import AIInsight
+    from app.models.daily_brief import DailyBrief
+    from app.models.signal_log import SignalLog
+
     result = await db.execute(sql_delete(Trend))
+    deleted = result.rowcount
+    await db.execute(sql_delete(AIInsight))
+    await db.execute(sql_delete(DailyBrief))
+    await db.execute(sql_delete(SignalLog))
     await db.commit()
-    return TrendsClearResponse(deleted=result.rowcount)
+    return TrendsClearResponse(deleted=deleted)
