@@ -22,17 +22,20 @@ from app.search.factory import SearchFactory
 
 logger = logging.getLogger(__name__)
 
-_DEEP_ANALYSIS_SYSTEM_PROMPT = (
+_DEEP_ANALYSIS_SYSTEM_PROMPT_TEMPLATE = (
     "你是一个资深商业趋势分析师。根据用户提供的热搜关键词和网络搜索结果，"
-    "进行深度商业分析。\n\n"
+    "为用户进行深度商业分析。\n\n"
+    "用户画像：{user_profile}\n\n"
+    "请结合用户的实际情况（资源、能力、阶段）给出切实可行的建议，"
+    "不要建议需要大量资金或资源的方案。\n\n"
     "严格以如下 JSON 格式返回（不要有任何额外文字）：\n"
-    "{\n"
+    "{{\n"
     '  "background": "事件背景，100-200字",\n'
-    '  "opportunity": "商业机会分析，100-200字",\n'
+    '  "opportunity": "结合用户画像的商业机会分析，100-200字",\n'
     '  "risk": "潜在风险，50-100字",\n'
-    '  "action": "建议行动，50-100字",\n'
+    '  "action": "用户当前可落地的具体行动，50-100字",\n'
     '  "sentiment": "positive 或 negative 或 neutral"\n'
-    "}"
+    "}}"
 )
 
 
@@ -196,6 +199,10 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
     else:
         search_context = "（无搜索结果，请基于你已有的知识进行分析）"
 
+    system_prompt = _DEEP_ANALYSIS_SYSTEM_PROMPT_TEMPLATE.format(
+        user_profile=settings.user_profile,
+    )
+
     user_content = (
         f"## 热搜关键词\n{keyword}\n\n"
         f"## 网络搜索结果\n{search_context}\n\n"
@@ -206,7 +213,7 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
         provider = LLMFactory.create()
         response = await provider.chat(
             messages=[
-                ChatMessage(role="system", content=_DEEP_ANALYSIS_SYSTEM_PROMPT),
+                ChatMessage(role="system", content=system_prompt),
                 ChatMessage(role="user", content=user_content),
             ],
             temperature=0.3,
