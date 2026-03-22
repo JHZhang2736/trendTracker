@@ -19,8 +19,14 @@ class Settings(BaseSettings):
     minimax_api_key: str = ""
     minimax_group_id: str = ""
 
-    # Scheduler
+    # Scheduler — global default and per-platform overrides
     collect_cron: str = "0 6 * * *"
+    weibo_cron: str = "0 */2 * * *"  # every 2 hours (hot search has short half-life)
+    google_cron: str = ""  # empty = use collect_cron
+    tiktok_cron: str = "0 */6 * * *"  # every 6 hours
+
+    # Signal-driven AI analysis
+    signal_auto_analyze_limit: int = 3  # max signals to auto-analyze per detection run
 
     # TikTok
     tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session

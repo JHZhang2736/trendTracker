@@ -117,7 +117,7 @@ async def test_collect_trends_job_calls_run_all_collectors():
     ):
         await collect_trends_job()
 
-    mock_run.assert_called_once_with(mock_db)
+    mock_run.assert_called_once_with(mock_db, platforms=None)
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +164,63 @@ def test_get_jobs_status_contains_cleanup():
 async def test_cleanup_old_trends_job_runs_without_error():
     """The cleanup job should not raise even when the DB has no old records."""
     await cleanup_old_trends_job()
+
+
+# ---------------------------------------------------------------------------
+# Per-platform scheduler jobs
+# ---------------------------------------------------------------------------
+
+
+def test_setup_scheduler_registers_per_platform_jobs():
+    sched = setup_scheduler()
+    for platform in ("weibo", "google", "tiktok"):
+        job = sched.get_job(f"collect_{platform}")
+        assert job is not None, f"collect_{platform} job not registered"
+
+
+def test_per_platform_jobs_have_cron_trigger():
+    from apscheduler.triggers.cron import CronTrigger
+
+    sched = setup_scheduler()
+    for platform in ("weibo", "google", "tiktok"):
+        job = sched.get_job(f"collect_{platform}")
+        assert isinstance(job.trigger, CronTrigger)
+
+
+def test_per_platform_weibo_uses_custom_cron():
+    """Weibo should use its own cron (every 2h), not the global default."""
+    sched = setup_scheduler()
+    job = sched.get_job("collect_weibo")
+    # Default weibo_cron = "0 */2 * * *"
+    assert "*/2" in str(job.trigger)
+
+
+def test_get_jobs_status_contains_per_platform_jobs():
+    setup_scheduler()
+    status = get_jobs_status()
+    ids = [j["id"] for j in status]
+    for platform in ("weibo", "google", "tiktok"):
+        assert f"collect_{platform}" in ids
+
+
+@pytest.mark.asyncio
+async def test_collect_trends_job_with_platforms_param():
+    """collect_trends_job should pass platforms arg to run_all_collectors."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    mock_run = AsyncMock(return_value={"status": "ok", "records_count": 5})
+    mock_db = AsyncMock()
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.database.AsyncSessionLocal", return_value=mock_ctx),
+        patch("app.services.collector.run_all_collectors", mock_run),
+    ):
+        await collect_trends_job(platforms=["weibo"])
+
+    mock_run.assert_called_once_with(mock_db, platforms=["weibo"])
 
 
 @pytest.mark.asyncio
