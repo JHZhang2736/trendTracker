@@ -125,6 +125,21 @@ export interface TrendsCountResponse {
   total: number
 }
 
+export interface SignalItem {
+  id: number
+  signal_type: "rank_jump" | "new_entry" | "heat_surge"
+  platform: string
+  keyword: string
+  description: string
+  value: number | null
+  detected_at: string
+}
+
+export interface SignalListResponse {
+  items: SignalItem[]
+  total: number
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
@@ -153,6 +168,10 @@ export const api = {
   },
   system: {
     config: () => request<SystemConfig>("/api/v1/system/config"),
+  },
+  signals: {
+    recent: (hours = 24, limit = 50) =>
+      request<SignalListResponse>(`/api/v1/signals/recent?hours=${hours}&limit=${limit}`),
   },
   trends: {
     list: (page = 1, pageSize = 20, platform?: string) => {

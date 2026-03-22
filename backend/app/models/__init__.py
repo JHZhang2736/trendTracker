@@ -5,6 +5,7 @@ from app.models.daily_brief import DailyBrief
 from app.models.keyword import Keyword
 from app.models.keyword_alert import KeywordAlert
 from app.models.platform import Platform
+from app.models.signal_log import SignalLog
 from app.models.trend import Trend
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "Keyword",
     "KeywordAlert",
     "Platform",
+    "SignalLog",
     "Trend",
 ]
