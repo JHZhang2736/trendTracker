@@ -48,6 +48,8 @@ async def _seed_trend(db: AsyncSession, keyword: str) -> None:
             rank=0,
             heat_score=9000.0,
             collected_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            relevance_label="relevant",
+            relevance_score=90.0,
         )
     )
     await db.commit()

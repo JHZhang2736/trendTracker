@@ -129,8 +129,8 @@ async def get_trends(
     # Score every record in Python (portable datetime arithmetic for recency decay).
     scored: list[tuple[Trend, float]] = []
     for t, max_heat in rows:
-        # Filter irrelevant items when relevant_only is set
-        if relevant_only and t.relevance_label == "irrelevant":
+        # When relevant_only is set, only keep items explicitly marked relevant
+        if relevant_only and t.relevance_label != "relevant":
             continue
         age_hours = max(0.0, (now - _to_naive_utc(t.collected_at)).total_seconds() / 3600)
         score = compute_convergence_score(
@@ -163,18 +163,22 @@ async def get_trends(
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 
 
-async def get_top_trends(db: AsyncSession, limit: int = 20) -> list[dict]:
+async def get_top_trends(
+    db: AsyncSession, limit: int = 20, relevant_only: bool = False
+) -> list[dict]:
     """Return top-N keywords by convergence_score over the last 24 hours.
 
     Aggregates by keyword (may span platforms), scores using per-platform max_heat.
     Cross-platform comparison is approximate — prefer /top-by-platform for display.
+    When *relevant_only* is True, only keywords marked as "relevant" are included.
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     since = now - timedelta(hours=24)
 
-    result = await db.execute(
-        select(Trend).where(Trend.collected_at >= since).order_by(Trend.collected_at.desc())
-    )
+    stmt = select(Trend).where(Trend.collected_at >= since)
+    if relevant_only:
+        stmt = stmt.where(Trend.relevance_label == "relevant")
+    result = await db.execute(stmt.order_by(Trend.collected_at.desc()))
     rows = result.scalars().all()
 
     # Per-platform max heat for normalization

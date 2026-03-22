@@ -317,3 +317,12 @@
 - Alembic迁移 003_add_trend_relevance_fields
 - 9个新测试（解析测试 + mock LLM集成 + 失败回退）
 - 239/239 全量测试通过
+- PR #73 → 已合并
+
+**用户**：1、点击智能过滤仍然出现不相关的内容 2、确保AI简报生成仅使用相关的内容
+**修复**：
+- 过滤逻辑从排除 `irrelevant` 改为仅保留 `relevant`（未评分的也排除）
+- `get_top_trends` 新增 `relevant_only` 参数
+- `generate_daily_brief` 使用 `settings.relevance_filter_enabled` 判断是否只用相关内容
+- 信号也通过 `_filter_relevant_signals` 过滤
+- 修复 test_brief 测试数据加上 relevance_label

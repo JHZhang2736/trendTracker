@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.base import ChatMessage
 from app.ai.factory import LLMFactory
+from app.config import settings
 from app.models.daily_brief import DailyBrief
 from app.services.email import send_email
 from app.services.signals import get_recent_signals
@@ -32,15 +33,21 @@ async def generate_daily_brief(db: AsyncSession, send_mail: bool = True) -> Dail
     """
     today = date.today()
 
+    # Whether to only use relevant content (based on AI relevance filter config)
+    use_relevant = settings.relevance_filter_enabled
+
     # 1. Try signal-driven: use recent 24h signals as primary input
     signals = await get_recent_signals(db, hours=24, limit=10)
+    # Filter signals to only include relevant keywords when relevance filter is on
+    if use_relevant:
+        signals = await _filter_relevant_signals(db, signals)
     signal_lines = []
     for sig in signals:
         line = f"[{sig.signal_type}] {sig.platform}: {sig.keyword} — {sig.description}"
         signal_lines.append(line)
 
-    # 2. Fallback: top-20 keywords from the last 24h
-    top = await get_top_trends(db=db, limit=20)
+    # 2. Fallback: top-20 keywords from the last 24h (relevant only when filter is on)
+    top = await get_top_trends(db=db, limit=20, relevant_only=use_relevant)
     keywords = [item["keyword"] for item in top]
 
     if signal_lines:
@@ -95,3 +102,24 @@ async def get_latest_brief(db: AsyncSession) -> DailyBrief | None:
     """Return the most recently created daily brief, or None if none exist."""
     result = await db.execute(select(DailyBrief).order_by(DailyBrief.created_at.desc()).limit(1))
     return result.scalar_one_or_none()
+
+
+async def _filter_relevant_signals(
+    db: AsyncSession,
+    signals: list,
+) -> list:
+    """Keep only signals whose keyword is marked 'relevant' in the Trend table."""
+    from app.models.trend import Trend
+
+    filtered = []
+    for sig in signals:
+        result = await db.execute(
+            select(Trend.relevance_label)
+            .where(Trend.keyword == sig.keyword, Trend.platform == sig.platform)
+            .order_by(Trend.collected_at.desc())
+            .limit(1)
+        )
+        label = result.scalar()
+        if label == "relevant":
+            filtered.append(sig)
+    return filtered
