@@ -214,9 +214,7 @@ def _try_parse_index_list(text: str) -> set[int] | None:
     return numbers if numbers else None
 
 
-def _build_result_from_scored(
-    scored_items: list[dict], keywords: list[str]
-) -> dict[str, dict]:
+def _build_result_from_scored(scored_items: list[dict], keywords: list[str]) -> dict[str, dict]:
     """Build result dict from scored items list."""
     # Map index → {s, r}
     score_map: dict[int, dict] = {}
