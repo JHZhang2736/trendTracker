@@ -17,6 +17,7 @@ class TrendItem(BaseModel):
     convergence_score: float
     relevance_score: float | None = None
     relevance_label: str | None = None
+    relevance_reason: str | None = None
 
 
 class TopTrendItem(BaseModel):

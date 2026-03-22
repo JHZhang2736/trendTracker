@@ -25,6 +25,13 @@ class AIInsight(Base):
     insight_type: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Deep analysis fields (Stage 3 pipeline)
+    search_context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    deep_analysis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_urls: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    analysis_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
     trend: Mapped[Optional[Trend]] = relationship("Trend", back_populates="ai_insights")
