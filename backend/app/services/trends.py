@@ -87,6 +87,7 @@ async def get_trends(
     page: int = 1,
     page_size: int = 20,
     platform: str | None = None,
+    relevant_only: bool = False,
 ) -> dict:
     """Return paginated trends sorted by convergence_score (per-platform normalised).
 
@@ -128,6 +129,9 @@ async def get_trends(
     # Score every record in Python (portable datetime arithmetic for recency decay).
     scored: list[tuple[Trend, float]] = []
     for t, max_heat in rows:
+        # Filter irrelevant items when relevant_only is set
+        if relevant_only and t.relevance_label == "irrelevant":
+            continue
         age_hours = max(0.0, (now - _to_naive_utc(t.collected_at)).total_seconds() / 3600)
         score = compute_convergence_score(
             heat_score=t.heat_score,
@@ -151,6 +155,8 @@ async def get_trends(
             "url": t.url,
             "collected_at": t.collected_at,
             "convergence_score": score,
+            "relevance_score": t.relevance_score,
+            "relevance_label": t.relevance_label,
         }
         for t, score in page_slice
     ]

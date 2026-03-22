@@ -16,6 +16,53 @@ from app.models.trend import Trend
 logger = logging.getLogger(__name__)
 
 
+async def _score_new_keywords(
+    db: AsyncSession,
+    hour_start: datetime,
+    hour_end: datetime,
+) -> None:
+    """Score newly collected keywords for personal relevance via AI."""
+    from app.config import settings as app_settings
+    from app.services.relevance import score_relevance
+
+    # Fetch keywords from the current hour that have no relevance score yet
+    result = await db.execute(
+        select(Trend).where(
+            Trend.collected_at >= hour_start,
+            Trend.collected_at < hour_end,
+            Trend.relevance_score.is_(None),
+        )
+    )
+    trends = result.scalars().all()
+    if not trends:
+        return
+
+    # Deduplicate keywords for the API call
+    unique_keywords = list({t.keyword for t in trends})
+    logger.info("Scoring relevance for %d unique keywords", len(unique_keywords))
+
+    try:
+        scores = await score_relevance(unique_keywords, app_settings.user_profile)
+    except Exception:
+        logger.exception("Relevance scoring failed, skipping")
+        return
+
+    # Apply scores back to trend records
+    for trend in trends:
+        info = scores.get(trend.keyword)
+        if info:
+            trend.relevance_score = info["score"]
+            trend.relevance_label = info["label"]
+
+    await db.commit()
+    relevant_count = sum(1 for t in trends if t.relevance_label == "relevant")
+    logger.info(
+        "Relevance scoring complete: %d/%d marked relevant",
+        relevant_count,
+        len(trends),
+    )
+
+
 async def _ensure_platform(db: AsyncSession, slug: str) -> int:
     """Get or create a platform record; return its id."""
     result = await db.execute(select(Platform).where(Platform.slug == slug))
@@ -100,6 +147,12 @@ async def run_all_collectors(
         total_records += len(records)
 
     await db.commit()
+
+    # AI relevance scoring for newly collected keywords
+    from app.config import settings as app_settings
+
+    if app_settings.relevance_filter_enabled and total_records > 0:
+        await _score_new_keywords(db, hour_start, hour_end)
 
     # Check keyword alert thresholds after each collection run
     from app.services.alerts import check_alerts

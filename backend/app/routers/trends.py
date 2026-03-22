@@ -37,13 +37,17 @@ async def list_trends(
     platform: str | None = Query(
         default=None, description="按平台过滤，如 weibo / google / tiktok"
     ),  # noqa: E501
+    relevant_only: bool = Query(default=False, description="只显示 AI 判定为相关的趋势"),
     db: AsyncSession = Depends(get_db),
 ) -> TrendsListResponse:
     """Return a paginated list of trend records with convergence_score.
 
     Pass *platform* to restrict results to a single platform.
+    Set *relevant_only=true* to filter out irrelevant trends.
     """
-    data = await get_trends(db=db, page=page, page_size=page_size, platform=platform)
+    data = await get_trends(
+        db=db, page=page, page_size=page_size, platform=platform, relevant_only=relevant_only
+    )
     return TrendsListResponse(**data)
 
 

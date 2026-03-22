@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     # Signal-driven AI analysis
     signal_auto_analyze_limit: int = 3  # max signals to auto-analyze per detection run
 
+    # AI relevance filter
+    relevance_filter_enabled: bool = True
+    user_profile: str = (
+        "计算机科学专业毕业生，关注AI科技进展，"
+        "有自主创业想法（电商、线上经济、炒股、炒币），"
+        "关注对个人发展和商业机会有价值的信息"
+    )
+
     # TikTok
     tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session
 
