@@ -15,6 +15,8 @@ class SearchFactory:
 
     _PROVIDERS: dict[str, str] = {
         "duckduckgo": "app.search.duckduckgo.DuckDuckGoProvider",
+        "google": "app.search.google.GoogleProvider",
+        "bing": "app.search.bing.BingProvider",
     }
 
     @classmethod
