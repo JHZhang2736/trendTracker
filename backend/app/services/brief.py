@@ -12,6 +12,7 @@ from app.ai.base import ChatMessage
 from app.ai.factory import LLMFactory
 from app.config import settings
 from app.models.daily_brief import DailyBrief
+from app.services.email import send_email
 from app.services.signals import get_recent_signals
 from app.services.trends import get_top_trends
 
@@ -87,6 +88,12 @@ async def generate_daily_brief(db: AsyncSession) -> DailyBrief:
 
     await db.commit()
     await db.refresh(brief)
+
+    # Send email notification with the brief content
+    await send_email(
+        subject=f"TrendTracker 每日简报 — {today}",
+        body=content,
+    )
 
     return brief
 

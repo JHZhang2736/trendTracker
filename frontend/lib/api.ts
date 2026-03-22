@@ -107,6 +107,7 @@ export interface SystemConfig {
   ai: { provider: string; configured: boolean }
   tiktok: { configured: boolean }
   scheduler: { collect_cron: string }
+  email: { configured: boolean; smtp_host: string; recipient: string | null }
 }
 
 export interface SchedulerStatus {
