@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from app.ai.base import ChatMessage
 from app.ai.factory import LLMFactory
@@ -39,32 +40,31 @@ async def _score_batch(
     keywords: list[str],
     user_profile: str,
 ) -> dict[str, dict]:
-    """Score a single batch of keywords."""
+    """Score a single batch of keywords.
+
+    Uses a minimal output format: LLM returns only the indices of relevant
+    keywords as a JSON array of numbers, e.g. ``[1, 3, 7]``.
+    Everything not in the list is irrelevant.
+    """
     numbered = "\n".join(f"{i + 1}. {kw}" for i, kw in enumerate(keywords))
     prompt = (
-        "你是一个严格的信息过滤助手。你的任务是帮用户过滤掉无关信息。\n"
-        "请严格按照用户画像判断，只有直接相关的才标 relevant，其余一律标 irrelevant。\n"
-        "通常热搜中大部分（60-80%）是娱乐、社会新闻，应该被过滤掉。\n\n"
+        "你是一个严格的信息过滤助手。\n\n"
         f"## 用户画像\n{user_profile}\n\n"
-        "## 标为 relevant 的条件（必须满足至少一项）\n"
-        "- AI、大模型、芯片、半导体等科技领域\n"
+        "## 相关的条件（必须满足至少一项）\n"
+        "- AI、大模型、芯片、半导体等科技\n"
         "- 电商、跨境贸易、直播带货、线上经济\n"
-        "- 股市、基金、A股、美股、港股、投资\n"
-        "- 加密货币、比特币、以太坊、Web3\n"
+        "- 股市、基金、投资、金融\n"
+        "- 加密货币、比特币、Web3\n"
         "- 创业、融资、商业模式、互联网产品\n"
         "- 影响上述领域的政策法规、经济数据\n\n"
-        "## 标为 irrelevant 的内容\n"
-        "- 明星、演员、歌手、偶像、综艺、影视剧\n"
-        "- 体育赛事、球星、运动员\n"
-        "- 社会事件、交通事故、天气、自然灾害\n"
-        "- 情感、家庭、婚恋、八卦\n"
-        "- 美食、旅游、生活方式（除非涉及电商/创业）\n\n"
+        "## 不相关的（一律排除）\n"
+        "明星八卦、综艺、影视剧、体育赛事、社会新闻、"
+        "天气、灾害、情感婚恋、美食旅游\n\n"
         f"## 待判断的热搜关键词\n{numbered}\n\n"
-        "## 输出格式（必须紧凑，不要换行和空格）\n"
-        "返回紧凑JSON数组，示例：\n"
-        '[{"i":1,"l":"relevant","s":80},{"i":2,"l":"irrelevant","s":10}]\n'
-        "字段：i=序号，l=label，s=score(0-100)\n"
-        "只返回JSON，不要其他文字。"
+        "请只返回相关条目的序号，用JSON数组格式。\n"
+        "例如如果第1、3、7条相关，返回: [1,3,7]\n"
+        "如果全部不相关，返回: []\n"
+        "只返回JSON数组，不要任何其他文字。"
     )
 
     try:
@@ -74,11 +74,14 @@ async def _score_batch(
             temperature=0.1,
         )
 
-        logger.info("Relevance LLM response: %s", response.content[:500])
-        parsed = _parse_response(response.content, keywords)
-        logger.info(
-            "Relevance result: %d/%d relevant",
-            sum(1 for v in parsed.values() if v["label"] == "relevant"),
+        raw = response.content
+        logger.warning("Relevance LLM raw response: %s", raw[:500])
+        parsed = _parse_index_list(raw, keywords)
+        relevant_count = sum(1 for v in parsed.values() if v["label"] == "relevant")
+        logger.warning(
+            "Relevance result: %d relevant, %d irrelevant out of %d",
+            relevant_count,
+            len(parsed) - relevant_count,
             len(parsed),
         )
         return parsed
@@ -87,65 +90,50 @@ async def _score_batch(
         return {}
 
 
-def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
-    """Parse LLM JSON response into keyword → {score, label} dict."""
-    # Strip markdown code fences if present
+def _parse_index_list(content: str, keywords: list[str]) -> dict[str, dict]:
+    """Parse LLM response as a list of relevant indices.
+
+    Expected format: ``[1, 3, 7]`` — indices (1-based) of relevant keywords.
+    All other keywords are marked irrelevant.
+    """
     text = content.strip()
+
+    # Strip markdown code fences if present
     if text.startswith("```"):
         lines = text.split("\n")
-        lines = lines[1:]  # remove opening fence
+        lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
-        text = "\n".join(lines)
+        text = "\n".join(lines).strip()
 
+    # Extract all numbers from the text (handles messy formats like "[1, 3, 7]" or "1,3,7")
+    numbers = set()
     try:
-        items = json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, (int, float)):
+                    numbers.add(int(item))
     except json.JSONDecodeError:
-        logger.warning("Failed to parse relevance response as JSON: %s", text[:300])
-        return {}
+        # Fallback: extract numbers with regex
+        numbers = {int(m) for m in re.findall(r"\b(\d+)\b", text)}
+        if numbers:
+            logger.warning("Relevance: JSON parse failed, extracted numbers via regex: %s", numbers)
+        else:
+            logger.warning("Relevance: could not parse response: %s", text[:300])
+            return {}
 
-    if not isinstance(items, list):
-        logger.warning("Relevance response is not a list: %s", type(items))
-        return {}
-
+    # Build result: indices in the set are relevant, others are irrelevant
     result: dict[str, dict] = {}
-
-    # Build index-based lookup (1-based)
-    kw_by_index = {i + 1: kw for i, kw in enumerate(keywords)}
-
-    for pos, item in enumerate(items):
-        # Determine which keyword this item corresponds to:
-        # 1) Try explicit index field ("i" or "index")
-        # 2) Fall back to array position (most reliable when LLM returns in order)
-        idx = item.get("i") if item.get("i") is not None else item.get("index")
-        matched_kw = None
-
-        if idx is not None:
-            try:
-                matched_kw = kw_by_index.get(int(idx))
-            except (ValueError, TypeError):
-                pass
-
-        if matched_kw is None:
-            # Positional fallback: item[0] → keyword[1], item[1] → keyword[2], ...
-            matched_kw = kw_by_index.get(pos + 1)
-
-        if matched_kw is None:
-            continue
-
-        score = float(item.get("s") or item.get("score") or 50)
-        label = item.get("l") or item.get("label") or ""
-        if label not in ("relevant", "irrelevant"):
-            label = "relevant" if score >= 50 else "irrelevant"
-        result[matched_kw] = {"score": min(100.0, max(0.0, score)), "label": label}
-
-    if len(result) < len(keywords):
-        missed = [kw for kw in keywords if kw not in result]
-        logger.warning(
-            "Relevance parse: %d/%d matched, missed: %s",
-            len(result),
-            len(keywords),
-            missed,
-        )
+    for i, kw in enumerate(keywords):
+        idx = i + 1  # 1-based
+        if idx in numbers:
+            result[kw] = {"score": 80.0, "label": "relevant"}
+        else:
+            result[kw] = {"score": 10.0, "label": "irrelevant"}
 
     return result
+
+
+# Keep old name for test imports
+_parse_response = _parse_index_list

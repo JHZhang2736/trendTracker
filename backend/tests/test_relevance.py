@@ -6,87 +6,52 @@ import json
 
 import pytest
 
-from app.services.relevance import _parse_response, score_relevance
+from app.services.relevance import _parse_index_list, score_relevance
 
 
 # ---------------------------------------------------------------------------
-# _parse_response — pure function tests
+# _parse_index_list — pure function tests
 # ---------------------------------------------------------------------------
 
 
-def test_parse_valid_json():
-    content = json.dumps([
-        {"keyword": "AI芯片", "score": 85, "label": "relevant"},
-        {"keyword": "明星离婚", "score": 10, "label": "irrelevant"},
-    ])
-    result = _parse_response(content, ["AI芯片", "明星离婚"])
-    assert result["AI芯片"]["score"] == 85.0
+def test_parse_json_array():
+    result = _parse_index_list("[1, 3]", ["AI芯片", "明星离婚", "比特币"])
     assert result["AI芯片"]["label"] == "relevant"
-    assert result["明星离婚"]["score"] == 10.0
     assert result["明星离婚"]["label"] == "irrelevant"
+    assert result["比特币"]["label"] == "relevant"
+
+
+def test_parse_empty_array_all_irrelevant():
+    result = _parse_index_list("[]", ["明星八卦", "综艺节目"])
+    assert result["明星八卦"]["label"] == "irrelevant"
+    assert result["综艺节目"]["label"] == "irrelevant"
 
 
 def test_parse_with_code_fences():
-    content = '```json\n[{"keyword": "比特币", "score": 90, "label": "relevant"}]\n```'
-    result = _parse_response(content, ["比特币"])
-    assert result["比特币"]["score"] == 90.0
+    result = _parse_index_list("```json\n[2]\n```", ["娱乐", "区块链"])
+    assert result["娱乐"]["label"] == "irrelevant"
+    assert result["区块链"]["label"] == "relevant"
 
 
-def test_parse_invalid_json_fallback():
-    result = _parse_response("this is not json", ["kw1", "kw2"])
+def test_parse_invalid_json_regex_fallback():
+    result = _parse_index_list("relevant: 1, 3", ["AI", "明星", "电商"])
+    assert result["AI"]["label"] == "relevant"
+    assert result["明星"]["label"] == "irrelevant"
+    assert result["电商"]["label"] == "relevant"
+
+
+def test_parse_completely_unparseable():
+    result = _parse_index_list("no numbers here", ["kw1"])
     assert result == {}
 
 
-def test_parse_missing_keywords_not_filled():
-    content = json.dumps([{"keyword": "kw1", "score": 80, "label": "relevant"}])
-    result = _parse_response(content, ["kw1", "kw2"])
-    assert "kw1" in result
-    assert "kw2" not in result  # LLM didn't return kw2 → left unscored
-
-
-def test_parse_score_clamped():
-    content = json.dumps([{"keyword": "kw", "score": 150, "label": "relevant"}])
-    result = _parse_response(content, ["kw"])
-    assert result["kw"]["score"] == 100.0
-
-
-def test_parse_invalid_label_derived_from_score():
-    content = json.dumps([{"keyword": "kw", "score": 30, "label": "maybe"}])
-    result = _parse_response(content, ["kw"])
-    assert result["kw"]["label"] == "irrelevant"  # score < 50 → irrelevant
-
-
-def test_parse_index_based_matching():
-    """LLM returns index instead of keyword — should match by position."""
-    content = json.dumps([
-        {"index": 1, "score": 90, "label": "relevant"},
-        {"index": 2, "score": 5, "label": "irrelevant"},
-    ])
-    result = _parse_response(content, ["AI大模型", "某明星离婚"])
-    assert result["AI大模型"]["label"] == "relevant"
-    assert result["某明星离婚"]["label"] == "irrelevant"
-
-
-def test_parse_compact_format():
-    """LLM returns compact keys (i, l, s) — should parse correctly."""
-    content = json.dumps([
-        {"i": 1, "l": "relevant", "s": 85},
-        {"i": 2, "l": "irrelevant", "s": 10},
-    ])
-    result = _parse_response(content, ["比特币暴涨", "某综艺开播"])
-    assert result["比特币暴涨"]["label"] == "relevant"
-    assert result["比特币暴涨"]["score"] == 85.0
-    assert result["某综艺开播"]["label"] == "irrelevant"
-
-
-def test_parse_fuzzy_keyword_matching():
-    """LLM returns slightly different keyword — should fuzzy match."""
-    content = json.dumps([
-        {"keyword": "AI芯片技术", "score": 85, "label": "relevant"},
-    ])
-    result = _parse_response(content, ["AI芯片"])
-    assert "AI芯片" in result
-    assert result["AI芯片"]["label"] == "relevant"
+def test_parse_all_keywords_get_label():
+    """Every input keyword should have an entry in the result."""
+    result = _parse_index_list("[1]", ["AI", "明星", "电商"])
+    assert len(result) == 3
+    assert result["AI"]["label"] == "relevant"
+    assert result["明星"]["label"] == "irrelevant"
+    assert result["电商"]["label"] == "irrelevant"
 
 
 # ---------------------------------------------------------------------------
@@ -105,14 +70,9 @@ async def test_score_relevance_with_mock(monkeypatch):
     """Mock LLM provider to test the full scoring flow."""
     from app.ai.base import ChatMessage, ChatResponse
 
-    mock_response = json.dumps([
-        {"keyword": "GPT-5发布", "score": 95, "label": "relevant"},
-        {"keyword": "某综艺收视率", "score": 5, "label": "irrelevant"},
-    ])
-
     class MockProvider:
         async def chat(self, messages: list[ChatMessage], **kwargs) -> ChatResponse:
-            return ChatResponse(content=mock_response, model="mock")
+            return ChatResponse(content="[1]", model="mock")
 
     monkeypatch.setattr(
         "app.services.relevance.LLMFactory",
@@ -124,7 +84,6 @@ async def test_score_relevance_with_mock(monkeypatch):
         "CS毕业生，关注AI",
     )
     assert result["GPT-5发布"]["label"] == "relevant"
-    assert result["GPT-5发布"]["score"] == 95.0
     assert result["某综艺收视率"]["label"] == "irrelevant"
 
 
