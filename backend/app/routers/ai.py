@@ -15,7 +15,11 @@ from app.schemas.ai import (
 )
 from app.services.ai import analyze_keyword
 from app.services.brief import generate_daily_brief, get_latest_brief
-from app.services.deep_analysis import deep_analyze_keyword, get_deep_analysis
+from app.services.deep_analysis import (
+    deep_analyze_keyword,
+    get_deep_analysis,
+    list_deep_analyses,
+)
 
 router = APIRouter()
 
@@ -55,6 +59,20 @@ async def deep_analyze(
     if result is None:
         raise HTTPException(status_code=500, detail="Deep analysis failed")
     return DeepAnalysisResponse(**result)
+
+
+@router.get(
+    "/deep-analyses",
+    summary="获取所有深度分析列表",
+    response_model=list[DeepAnalysisResponse],
+)
+async def list_deep_analyses_endpoint(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+) -> list[DeepAnalysisResponse]:
+    """Return all deep analysis reports, most recent first."""
+    items = await list_deep_analyses(db, limit=limit)
+    return [DeepAnalysisResponse(**item) for item in items]
 
 
 @router.get(

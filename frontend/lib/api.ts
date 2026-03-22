@@ -80,6 +80,26 @@ export interface AnalyzeResult {
   created_at: string
 }
 
+export interface DeepAnalysisContent {
+  background: string
+  opportunity: string
+  risk: string
+  action: string
+  sentiment: "positive" | "negative" | "neutral"
+}
+
+export interface DeepAnalysisResponse {
+  id: number
+  keyword: string
+  deep_analysis: DeepAnalysisContent
+  source_urls: string[]
+  search_results_count: number
+  analysis_type: string | null
+  model: string | null
+  created_at: string | null
+  cached: boolean
+}
+
 export interface BriefResponse {
   id: number
   date: string
@@ -167,6 +187,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ keyword }),
       }),
+    deepAnalyze: (keyword: string) =>
+      request<DeepAnalysisResponse>("/api/v1/ai/deep-analyze", {
+        method: "POST",
+        body: JSON.stringify({ keyword }),
+      }),
+    listDeepAnalyses: () =>
+      request<DeepAnalysisResponse[]>("/api/v1/ai/deep-analyses"),
     latestBrief: () => request<BriefResponse>("/api/v1/ai/brief/latest"),
     generateBrief: () =>
       request<BriefResponse>("/api/v1/ai/brief", { method: "POST" }),

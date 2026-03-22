@@ -161,6 +161,18 @@ async def get_deep_analysis(keyword: str, db: AsyncSession) -> dict | None:
     return _insight_to_dict(insight, cached=True)
 
 
+async def list_deep_analyses(db: AsyncSession, limit: int = 50) -> list[dict]:
+    """Return all deep analyses, most recent first."""
+    result = await db.execute(
+        select(AIInsight)
+        .where(AIInsight.deep_analysis.isnot(None))
+        .order_by(AIInsight.created_at.desc())
+        .limit(limit)
+    )
+    insights = result.scalars().all()
+    return [_insight_to_dict(ins, cached=True) for ins in insights]
+
+
 async def _web_search(keyword: str) -> list[SearchResult]:
     """Search the web for context about a keyword."""
     try:
