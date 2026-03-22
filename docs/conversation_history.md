@@ -326,3 +326,6 @@
 - `generate_daily_brief` 使用 `settings.relevance_filter_enabled` 判断是否只用相关内容
 - 信号也通过 `_filter_relevant_signals` 过滤
 - 修复 test_brief 测试数据加上 relevance_label
+
+**用户**：现在趋势列表中会出现完全一样的条目，只是爬取时间不一样，请你修复一下
+**修复**：get_trends 中按 (platform, keyword) 去重，同一关键词多次采集只保留收敛评分最高的那条

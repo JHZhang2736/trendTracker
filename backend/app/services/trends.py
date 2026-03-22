@@ -127,7 +127,8 @@ async def get_trends(
     ).all()
 
     # Score every record in Python (portable datetime arithmetic for recency decay).
-    scored: list[tuple[Trend, float]] = []
+    # Deduplicate by (platform, keyword): keep only the entry with the highest score.
+    best: dict[tuple[str, str], tuple[Trend, float]] = {}
     for t, max_heat in rows:
         # When relevant_only is set, only keep items explicitly marked relevant
         if relevant_only and t.relevance_label != "relevant":
@@ -139,7 +140,11 @@ async def get_trends(
             age_hours=age_hours,
             platform_max_heat=float(max_heat or 0.0),
         )
-        scored.append((t, score))
+        key = (t.platform, t.keyword)
+        if key not in best or score > best[key][1]:
+            best[key] = (t, score)
+
+    scored = list(best.values())
 
     # Sort by convergence_score descending, then paginate in Python.
     scored.sort(key=lambda x: x[1], reverse=True)
