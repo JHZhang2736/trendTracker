@@ -58,13 +58,24 @@ function AnalysisCard({ item }: { item: DeepAnalysisResponse }) {
           </div>
         </div>
 
-        <div className="flex items-start gap-2">
-          <TrendingUp className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+        {item.deep_analysis.opportunities.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">商业机会</p>
-            <p className="text-sm">{item.deep_analysis.opportunity || "—"}</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">商业机会</p>
+            <div className="space-y-2">
+              {item.deep_analysis.opportunities.slice(0, expanded ? undefined : 2).map((opp, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <TrendingUp className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
+                  <div>
+                    <span className="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+                      {opp.angle}
+                    </span>
+                    <p className="text-sm mt-0.5">{opp.idea}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {expanded && (
           <>

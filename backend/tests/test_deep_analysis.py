@@ -61,7 +61,10 @@ async def test_llm_analyze_success(monkeypatch):
     llm_response = json.dumps(
         {
             "background": "背景信息",
-            "opportunity": "商业机会",
+            "opportunities": [
+                {"angle": "技术/产品", "idea": "开发AI工具"},
+                {"angle": "内容/传播", "idea": "做科普视频"},
+            ],
             "risk": "潜在风险",
             "action": "建议行动",
             "sentiment": "positive",
@@ -83,6 +86,8 @@ async def test_llm_analyze_success(monkeypatch):
     assert result is not None
     assert result["background"] == "背景信息"
     assert result["sentiment"] == "positive"
+    assert len(result["opportunities"]) == 2
+    assert result["opportunities"][0]["angle"] == "技术/产品"
 
 
 @pytest.mark.asyncio
@@ -121,7 +126,7 @@ async def test_llm_analyze_failure(monkeypatch):
 
 
 def test_insight_to_dict():
-    """Test the AIInsight → dict conversion."""
+    """Test the AIInsight → dict conversion with new opportunities format."""
 
     class FakeInsight:
         id = 1
@@ -129,7 +134,10 @@ def test_insight_to_dict():
         deep_analysis = json.dumps(
             {
                 "background": "bg",
-                "opportunity": "opp",
+                "opportunities": [
+                    {"angle": "技术/产品", "idea": "开发工具"},
+                    {"angle": "内容/传播", "idea": "做视频"},
+                ],
                 "risk": "risk",
                 "action": "act",
                 "sentiment": "positive",
@@ -144,9 +152,39 @@ def test_insight_to_dict():
     result = _insight_to_dict(FakeInsight(), cached=False)
     assert result["keyword"] == "AI芯片"
     assert result["deep_analysis"]["background"] == "bg"
+    assert len(result["deep_analysis"]["opportunities"]) == 2
+    assert result["deep_analysis"]["opportunities"][0]["angle"] == "技术/产品"
     assert len(result["source_urls"]) == 2
     assert result["search_results_count"] == 1
     assert result["cached"] is False
+
+
+def test_insight_to_dict_legacy_opportunity():
+    """Legacy 'opportunity' string should be converted to opportunities array."""
+
+    class FakeInsight:
+        id = 3
+        keyword = "legacy"
+        deep_analysis = json.dumps(
+            {
+                "background": "bg",
+                "opportunity": "旧格式商业机会",
+                "risk": "risk",
+                "action": "act",
+                "sentiment": "neutral",
+            }
+        )
+        source_urls = None
+        search_context = None
+        analysis_type = "auto"
+        model = "mock"
+        created_at = None
+
+    result = _insight_to_dict(FakeInsight(), cached=True)
+    opps = result["deep_analysis"]["opportunities"]
+    assert len(opps) == 1
+    assert opps[0]["angle"] == "综合"
+    assert opps[0]["idea"] == "旧格式商业机会"
 
 
 def test_insight_to_dict_empty_fields():
@@ -163,7 +201,7 @@ def test_insight_to_dict_empty_fields():
         created_at = None
 
     result = _insight_to_dict(FakeInsight(), cached=True)
-    assert result["deep_analysis"] == {}
+    assert result["deep_analysis"]["opportunities"] == []
     assert result["source_urls"] == []
     assert result["search_results_count"] == 0
     assert result["cached"] is True
