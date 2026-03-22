@@ -56,6 +56,27 @@ def test_parse_invalid_label_derived_from_score():
     assert result["kw"]["label"] == "irrelevant"  # score < 50 → irrelevant
 
 
+def test_parse_index_based_matching():
+    """LLM returns index instead of keyword — should match by position."""
+    content = json.dumps([
+        {"index": 1, "score": 90, "label": "relevant"},
+        {"index": 2, "score": 5, "label": "irrelevant"},
+    ])
+    result = _parse_response(content, ["AI大模型", "某明星离婚"])
+    assert result["AI大模型"]["label"] == "relevant"
+    assert result["某明星离婚"]["label"] == "irrelevant"
+
+
+def test_parse_fuzzy_keyword_matching():
+    """LLM returns slightly different keyword — should fuzzy match."""
+    content = json.dumps([
+        {"keyword": "AI芯片技术", "score": 85, "label": "relevant"},
+    ])
+    result = _parse_response(content, ["AI芯片"])
+    assert "AI芯片" in result
+    assert result["AI芯片"]["label"] == "relevant"
+
+
 # ---------------------------------------------------------------------------
 # score_relevance — integration (mocked LLM)
 # ---------------------------------------------------------------------------

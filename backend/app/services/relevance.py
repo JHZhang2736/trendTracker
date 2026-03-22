@@ -42,17 +42,30 @@ async def _score_batch(
     """Score a single batch of keywords."""
     numbered = "\n".join(f"{i + 1}. {kw}" for i, kw in enumerate(keywords))
     prompt = (
-        "你是一个信息过滤助手。根据用户画像，判断以下热搜关键词对该用户是否有参考价值。\n\n"
+        "你是一个严格的信息过滤助手。你的任务是帮用户过滤掉无关信息。\n"
+        "请严格按照用户画像判断，只有直接相关的才标 relevant，其余一律标 irrelevant。\n"
+        "通常热搜中大部分（60-80%）是娱乐、社会新闻，应该被过滤掉。\n\n"
         f"## 用户画像\n{user_profile}\n\n"
-        "## 判断标准\n"
-        "- 与用户关注领域（AI科技、电商、线上经济、股市、加密货币、创业）相关 → relevant\n"
-        "- 涉及政策法规、经济走势、行业变革等可能影响商业决策的 → relevant\n"
-        "- 纯娱乐八卦、明星绯闻、综艺节目、体育赛事、社会新闻等 → irrelevant\n\n"
-        f"## 热搜关键词\n{numbered}\n\n"
-        "## 输出要求\n"
+        "## 标为 relevant 的条件（必须满足至少一项）\n"
+        "- AI、大模型、芯片、半导体等科技领域\n"
+        "- 电商、跨境贸易、直播带货、线上经济\n"
+        "- 股市、基金、A股、美股、港股、投资\n"
+        "- 加密货币、比特币、以太坊、Web3\n"
+        "- 创业、融资、商业模式、互联网产品\n"
+        "- 影响上述领域的政策法规、经济数据\n\n"
+        "## 标为 irrelevant 的内容\n"
+        "- 明星、演员、歌手、偶像、综艺、影视剧\n"
+        "- 体育赛事、球星、运动员\n"
+        "- 社会事件、交通事故、天气、自然灾害\n"
+        "- 情感、家庭、婚恋、八卦\n"
+        "- 美食、旅游、生活方式（除非涉及电商/创业）\n\n"
+        f"## 待判断的热搜关键词\n{numbered}\n\n"
+        "## 输出格式\n"
         "返回 JSON 数组，每项包含:\n"
-        '- keyword: 原始关键词\n- score: 相关性评分 0-100\n- label: "relevant" 或 "irrelevant"\n\n'
-        "只返回 JSON 数组，不要其他内容。"
+        "- index: 序号（1开始）\n"
+        '- label: "relevant" 或 "irrelevant"\n'
+        "- score: 相关性 0-100\n\n"
+        "只返回 JSON 数组，不要其他文字。"
     )
 
     try:
@@ -62,11 +75,16 @@ async def _score_batch(
             temperature=0.1,
         )
 
+        logger.info("Relevance LLM response: %s", response.content[:500])
         parsed = _parse_response(response.content, keywords)
+        logger.info(
+            "Relevance result: %d/%d relevant",
+            sum(1 for v in parsed.values() if v["label"] == "relevant"),
+            len(parsed),
+        )
         return parsed
     except Exception:
         logger.exception("Relevance scoring failed for batch of %d keywords", len(keywords))
-        # On failure, return empty — leave items unscored (no label assigned)
         return {}
 
 
@@ -84,18 +102,42 @@ def _parse_response(content: str, keywords: list[str]) -> dict[str, dict]:
     try:
         items = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("Failed to parse relevance response as JSON, leaving unscored")
+        logger.warning("Failed to parse relevance response as JSON: %s", text[:300])
+        return {}
+
+    if not isinstance(items, list):
+        logger.warning("Relevance response is not a list: %s", type(items))
         return {}
 
     result: dict[str, dict] = {}
-    if isinstance(items, list):
-        for item in items:
-            kw = item.get("keyword", "")
-            score = float(item.get("score", 50))
-            label = item.get("label", "relevant")
-            if label not in ("relevant", "irrelevant"):
-                label = "relevant" if score >= 50 else "irrelevant"
-            result[kw] = {"score": min(100.0, max(0.0, score)), "label": label}
 
-    # Keywords not in the LLM response are left unscored (no entry)
+    # Build index-based lookup for matching by index (more robust than keyword matching)
+    kw_by_index = {i + 1: kw for i, kw in enumerate(keywords)}
+
+    for item in items:
+        # Try index-based matching first (most reliable)
+        idx = item.get("index")
+        kw_from_item = item.get("keyword", "")
+        matched_kw = None
+
+        if idx is not None and idx in kw_by_index:
+            matched_kw = kw_by_index[idx]
+        elif kw_from_item in keywords:
+            matched_kw = kw_from_item
+        else:
+            # Fuzzy: try to find keyword that contains or is contained by the response
+            for orig_kw in keywords:
+                if orig_kw in kw_from_item or kw_from_item in orig_kw:
+                    matched_kw = orig_kw
+                    break
+
+        if matched_kw is None:
+            continue
+
+        score = float(item.get("score", 50))
+        label = item.get("label", "")
+        if label not in ("relevant", "irrelevant"):
+            label = "relevant" if score >= 50 else "irrelevant"
+        result[matched_kw] = {"score": min(100.0, max(0.0, score)), "label": label}
+
     return result
