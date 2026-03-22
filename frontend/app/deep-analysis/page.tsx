@@ -22,7 +22,7 @@ function formatTime(iso: string | null) {
 }
 
 function AnalysisCard({ item }: { item: DeepAnalysisResponse }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const sentiment = sentimentConfig[item.deep_analysis.sentiment] ?? sentimentConfig.neutral
 
   return (

@@ -387,7 +387,7 @@ export default function TrendsPage() {
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
   const [compareKeyword, setCompareKeyword] = useState<string | null>(null)
   const [allItems, setAllItems] = useState<Record<string, TrendItem[]>>({})
-  const [relevantOnly, setRelevantOnly] = useState(false)
+  const [relevantOnly, setRelevantOnly] = useState(true)
 
   useEffect(() => {
     api.trends
