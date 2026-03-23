@@ -40,21 +40,31 @@ class BaseSearchProvider(ABC):
                 if attempt > 0:
                     logger.info(
                         "%s search succeeded on attempt %d for '%s'",
-                        self.provider_name, attempt + 1, query,
+                        self.provider_name,
+                        attempt + 1,
+                        query,
                     )
                 return results
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
-                delay = BASE_DELAY * (2 ** attempt)
+                delay = BASE_DELAY * (2**attempt)
                 logger.warning(
                     "%s search attempt %d/%d failed for '%s': %s — retrying in %.1fs",
-                    self.provider_name, attempt + 1, MAX_RETRIES, query, exc, delay,
+                    self.provider_name,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    query,
+                    exc,
+                    delay,
                 )
                 await asyncio.sleep(delay)
 
         logger.error(
             "%s search failed after %d attempts for '%s': %s",
-            self.provider_name, MAX_RETRIES, query, last_exc,
+            self.provider_name,
+            MAX_RETRIES,
+            query,
+            last_exc,
         )
         return []
 
