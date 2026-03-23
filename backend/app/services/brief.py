@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.base import ChatMessage
 from app.ai.factory import LLMFactory
 from app.config import settings
+from app.models.ai_insight import AIInsight
 from app.models.daily_brief import DailyBrief
 from app.services.email import send_email
 from app.services.signals import get_recent_signals
@@ -18,17 +20,87 @@ from app.services.trends import get_top_trends
 
 logger = logging.getLogger(__name__)
 
-_BRIEF_SYSTEM_PROMPT = (
+_BRIEF_SYSTEM_PROMPT_TEMPLATE = (
     "你是一个商业趋势分析师。根据用户提供的趋势信号和热门关键词，"
     "生成一份简洁的商业趋势简报，300字以内，突出关键机会与风险。"
     "优先分析趋势信号中标注的突增、新面孔和排名跃升词。"
+    "{user_profile_section}"
+    "{deep_analysis_instruction}"
 )
+
+
+def _build_system_prompt(has_deep_analyses: bool) -> str:
+    """Build the system prompt with optional user profile and deep analysis instructions."""
+    if settings.user_profile:
+        user_profile_section = (
+            f"\n\n用户画像：{settings.user_profile}\n"
+            "请结合用户的背景和兴趣，给出与其实际情况相关的商业建议。"
+        )
+    else:
+        user_profile_section = ""
+
+    if has_deep_analyses:
+        deep_analysis_instruction = (
+            "\n\n用户还提供了部分关键词的深度分析结果，请优先引用这些已有分析，"
+            "在此基础上补充整合，避免重复分析。"
+        )
+    else:
+        deep_analysis_instruction = ""
+
+    return _BRIEF_SYSTEM_PROMPT_TEMPLATE.format(
+        user_profile_section=user_profile_section,
+        deep_analysis_instruction=deep_analysis_instruction,
+    )
+
+
+async def _get_recent_deep_analyses(db: AsyncSession, hours: int = 24) -> list[dict]:
+    """Fetch recent deep analysis summaries for brief context."""
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+    result = await db.execute(
+        select(AIInsight)
+        .where(
+            AIInsight.deep_analysis.isnot(None),
+            AIInsight.created_at >= cutoff,
+        )
+        .order_by(AIInsight.created_at.desc())
+        .limit(5)
+    )
+    insights = result.scalars().all()
+
+    summaries = []
+    for ins in insights:
+        try:
+            deep = json.loads(ins.deep_analysis)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        # Extract concise summary from the structured analysis
+        background = deep.get("background", "")
+        action = deep.get("action", "")
+        sentiment = deep.get("sentiment", "")
+        opportunities = deep.get("opportunities", [])
+        opp_text = "；".join(
+            o.get("idea", "") for o in opportunities if isinstance(o, dict) and o.get("idea")
+        )
+
+        summary = f"关键词「{ins.keyword}」：{background}"
+        if opp_text:
+            summary += f" 机会：{opp_text}"
+        if action:
+            summary += f" 建议行动：{action}"
+        if sentiment:
+            summary += f"（情感：{sentiment}）"
+
+        summaries.append(summary)
+
+    return summaries
 
 
 async def generate_daily_brief(db: AsyncSession) -> DailyBrief:
     """Generate today's brief and persist it.
 
     Signal-driven: prioritizes recent signals, falls back to top keywords.
+    Injects user_profile for personalized advice and references recent deep analyses.
     If a brief for today already exists it will be overwritten.
     """
     today = date.today()
@@ -50,6 +122,9 @@ async def generate_daily_brief(db: AsyncSession) -> DailyBrief:
     top = await get_top_trends(db=db, limit=20, relevant_only=use_relevant)
     keywords = [item["keyword"] for item in top]
 
+    # 3. Fetch recent deep analyses as additional context
+    deep_summaries = await _get_recent_deep_analyses(db)
+
     if signal_lines:
         signals_text = "\n".join(signal_lines)
         keyword_text = "、".join(keywords[:10]) if keywords else "无"
@@ -60,10 +135,16 @@ async def generate_daily_brief(db: AsyncSession) -> DailyBrief:
     else:
         user_msg = "今日暂无热词数据，请生成一份通用商业趋势展望简报。"
 
+    if deep_summaries:
+        deep_text = "\n".join(f"- {s}" for s in deep_summaries)
+        user_msg += f"\n\n已有深度分析：\n{deep_text}"
+
+    system_prompt = _build_system_prompt(has_deep_analyses=bool(deep_summaries))
+
     provider = LLMFactory.create()
     response = await provider.chat(
         messages=[
-            ChatMessage(role="system", content=_BRIEF_SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=user_msg),
         ]
     )
