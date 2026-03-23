@@ -18,10 +18,16 @@ class OpportunityAngle(BaseModel):
 
 
 class DeepAnalysisContent(BaseModel):
+    mode: str = "business"
+    # Business mode fields
     background: str = ""
     opportunities: list[OpportunityAngle] = []
     risk: str = ""
     action: str = ""
+    # News mode fields
+    summary: str = ""
+    key_facts: list[str] = []
+    # Common
     sentiment: Literal["positive", "negative", "neutral"] = "neutral"
 
 

@@ -76,10 +76,13 @@ export interface OpportunityAngle {
 }
 
 export interface DeepAnalysisContent {
-  background: string
-  opportunities: OpportunityAngle[]
-  risk: string
-  action: string
+  mode?: "business" | "news"
+  background?: string
+  opportunities?: OpportunityAngle[]
+  risk?: string
+  action?: string
+  summary?: string
+  key_facts?: string[]
   sentiment: "positive" | "negative" | "neutral"
 }
 
@@ -108,6 +111,7 @@ export interface SystemConfig {
   tiktok: { configured: boolean }
   scheduler: { collect_cron: string }
   email: { configured: boolean; smtp_host: string; recipient: string | null }
+  deep_analysis: { mode: "business" | "news" }
 }
 
 export interface SchedulerStatus {
@@ -180,6 +184,11 @@ export const api = {
   },
   system: {
     config: () => request<SystemConfig>("/api/v1/system/config"),
+    setAnalysisMode: (mode: "business" | "news") =>
+      request<{ mode: string }>("/api/v1/system/deep-analysis-mode", {
+        method: "PUT",
+        body: JSON.stringify({ mode }),
+      }),
   },
   signals: {
     recent: (hours = 24, limit = 50) =>

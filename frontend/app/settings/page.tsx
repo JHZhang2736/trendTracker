@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Settings, RefreshCw, Trash2, CheckCircle, XCircle, Clock, Mail } from "lucide-react"
+import { Settings, RefreshCw, Trash2, CheckCircle, XCircle, Clock, Mail, Newspaper, Briefcase } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -81,6 +81,17 @@ export default function SettingsPage() {
       await load()
     } finally {
       setCollecting(false)
+    }
+  }
+
+  const handleToggleMode = async () => {
+    if (!config) return
+    const newMode = config.deep_analysis.mode === "business" ? "news" : "business"
+    try {
+      await api.system.setAnalysisMode(newMode)
+      setConfig({ ...config, deep_analysis: { mode: newMode } })
+    } catch {
+      /* ignore */
     }
   }
 
@@ -256,6 +267,27 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between px-3 py-2.5">
                 <span className="text-muted-foreground">API Key</span>
                 <StatusBadge ok={config.ai.configured} />
+              </div>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-muted-foreground">深度分析模式</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-7 text-xs"
+                  onClick={handleToggleMode}
+                >
+                  {config.deep_analysis.mode === "news" ? (
+                    <>
+                      <Newspaper className="w-3.5 h-3.5" />
+                      新闻简介
+                    </>
+                  ) : (
+                    <>
+                      <Briefcase className="w-3.5 h-3.5" />
+                      商业分析
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           ) : (

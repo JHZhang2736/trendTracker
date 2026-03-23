@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     deep_analysis_auto_ratio: float = 0.3  # analyze top 30% of relevant keywords
     deep_analysis_auto_max: int = 10  # hard cap per collection run
     deep_analysis_cooldown_hours: int = 24  # skip re-analysis within this window
+    deep_analysis_mode: str = "business"  # "business" or "news"
 
     # Scheduler — global default and per-platform overrides
     collect_cron: str = "0 6 * * *"
