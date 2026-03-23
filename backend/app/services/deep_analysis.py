@@ -22,15 +22,16 @@ from app.search.factory import SearchFactory
 
 logger = logging.getLogger(__name__)
 
-_BUSINESS_SYSTEM_PROMPT_TEMPLATE = (
-    "你是一个资深商业趋势分析师。根据用户提供的热搜关键词和网络搜索结果，"
-    "从多个商业视角为用户分析机会。\n\n"
+_DEEP_ANALYSIS_SYSTEM_PROMPT_TEMPLATE = (
+    "你是一个资深新闻分析师和商业顾问。根据用户提供的热搜关键词和网络搜索结果，"
+    "先客观概述事件，再从多个商业视角分析机会。\n\n"
     "用户画像：{user_profile}\n\n"
     "请结合用户的实际情况（资源、能力、阶段）给出切实可行的建议，"
     "不要建议需要大量资金或资源的方案。\n\n"
     "严格以如下 JSON 格式返回（不要有任何额外文字）：\n"
     "{{\n"
-    '  "background": "事件背景，100-200字",\n'
+    '  "summary": "新闻概述，200-300字，客观陈述事件经过和影响",\n'
+    '  "key_facts": ["核心要点1", "核心要点2", "核心要点3"],\n'
     '  "opportunities": [\n'
     '    {{"angle": "视角名称", "idea": "具体分析，50-100字"}}\n'
     "  ],\n"
@@ -38,41 +39,31 @@ _BUSINESS_SYSTEM_PROMPT_TEMPLATE = (
     '  "action": "用户当前最值得尝试的1-2个具体行动，50-100字",\n'
     '  "sentiment": "positive 或 negative 或 neutral"\n'
     "}}\n\n"
-    "opportunities 必须包含以下视角（跳过明显不适用的）：\n"
-    "- 技术/产品：能否开发工具、插件、SaaS、小程序\n"
-    "- 内容/传播：能否做自媒体、短视频、教程、知识付费\n"
-    "- 电商/选品：能否在电商平台卖相关产品或服务\n"
-    "- 投资/市场：对投资决策、市场走势有什么启示"
-)
-
-_NEWS_SYSTEM_PROMPT_TEMPLATE = (
-    "你是一个资深新闻编辑。根据用户提供的热搜关键词和网络搜索结果，"
-    "生成一段客观、专业的新闻简介。\n\n"
-    "严格以如下 JSON 格式返回（不要有任何额外文字）：\n"
-    "{{\n"
-    '  "summary": "新闻摘要，200-300字，客观陈述事件经过和影响",\n'
-    '  "key_facts": ["核心要点1", "核心要点2", "核心要点3"],\n'
-    '  "sentiment": "positive 或 negative 或 neutral"\n'
-    "}}\n\n"
     "要求：\n"
     "- summary 以新闻报道风格撰写，客观中立，包含时间、人物、事件等要素\n"
     "- key_facts 提取 3-5 个最重要的事实要点，每条 20-40 字\n"
-    "- 不要添加个人观点或商业建议"
+    "- opportunities 必须包含以下视角（跳过明显不适用的）：\n"
+    "  · 技术/产品：能否开发工具、插件、SaaS、小程序\n"
+    "  · 内容/传播：能否做自媒体、短视频、教程、知识付费\n"
+    "  · 电商/选品：能否在电商平台卖相关产品或服务\n"
+    "  · 投资/市场：对投资决策、市场走势有什么启示"
 )
 
-# Runtime analysis mode — defaults from env, can be toggled via API
-_runtime_analysis_mode: str | None = None
+# Runtime display mode — controls frontend visibility of business analysis section
+_runtime_show_business: bool | None = None
 
 
-def get_analysis_mode() -> str:
-    """Return the current deep analysis mode ('business' or 'news')."""
-    return _runtime_analysis_mode or settings.deep_analysis_mode
+def get_show_business() -> bool:
+    """Return whether the business analysis section should be displayed."""
+    if _runtime_show_business is not None:
+        return _runtime_show_business
+    return settings.deep_analysis_mode != "news"
 
 
-def set_analysis_mode(mode: str) -> None:
-    """Set the runtime deep analysis mode."""
-    global _runtime_analysis_mode  # noqa: PLW0603
-    _runtime_analysis_mode = mode
+def set_show_business(show: bool) -> None:
+    """Set the runtime display mode for business analysis."""
+    global _runtime_show_business  # noqa: PLW0603
+    _runtime_show_business = show
 
 
 async def deep_analyze_keyword(
@@ -230,9 +221,7 @@ async def _web_search(keyword: str) -> list[SearchResult]:
 
 
 async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict | None:
-    """Call LLM with keyword + search context for deep analysis or news summary."""
-    mode = get_analysis_mode()
-
+    """Call LLM with keyword + search context — returns both summary and business analysis."""
     # Build context from search results
     if search_results:
         context_lines = []
@@ -242,22 +231,15 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
     else:
         search_context = "（无搜索结果，请基于你已有的知识进行分析）"
 
-    if mode == "news":
-        system_prompt = _NEWS_SYSTEM_PROMPT_TEMPLATE
-        user_content = (
-            f"## 热搜关键词\n{keyword}\n\n"
-            f"## 网络搜索结果\n{search_context}\n\n"
-            "请基于以上信息生成新闻简介。"
-        )
-    else:
-        system_prompt = _BUSINESS_SYSTEM_PROMPT_TEMPLATE.format(
-            user_profile=settings.user_profile,
-        )
-        user_content = (
-            f"## 热搜关键词\n{keyword}\n\n"
-            f"## 网络搜索结果\n{search_context}\n\n"
-            "请基于以上信息进行深度商业分析。"
-        )
+    system_prompt = _DEEP_ANALYSIS_SYSTEM_PROMPT_TEMPLATE.format(
+        user_profile=settings.user_profile,
+    )
+
+    user_content = (
+        f"## 热搜关键词\n{keyword}\n\n"
+        f"## 网络搜索结果\n{search_context}\n\n"
+        "请基于以上信息进行分析。"
+    )
 
     try:
         provider = LLMFactory.create()
@@ -288,21 +270,12 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
         if sentiment not in {"positive", "negative", "neutral"}:
             sentiment = "neutral"
 
-        if mode == "news":
-            # Normalize key_facts
-            key_facts = parsed.get("key_facts", [])
-            if not isinstance(key_facts, list):
-                key_facts = []
+        # Normalize key_facts
+        key_facts = parsed.get("key_facts", [])
+        if not isinstance(key_facts, list):
+            key_facts = []
 
-            return {
-                "mode": "news",
-                "summary": parsed.get("summary", ""),
-                "key_facts": key_facts,
-                "sentiment": sentiment,
-            }
-
-        # Business mode
-        # Normalize opportunities: support both new array and legacy string format
+        # Normalize opportunities
         raw_opps = parsed.get("opportunities", [])
         if isinstance(raw_opps, list):
             opportunities = [
@@ -319,8 +292,8 @@ async def _llm_analyze(keyword: str, search_results: list[SearchResult]) -> dict
             opportunities = [{"angle": "综合", "idea": legacy_opp}]
 
         return {
-            "mode": "business",
-            "background": parsed.get("background", ""),
+            "summary": parsed.get("summary", ""),
+            "key_facts": key_facts,
             "opportunities": opportunities,
             "risk": parsed.get("risk", ""),
             "action": parsed.get("action", ""),
@@ -341,22 +314,22 @@ def _insight_to_dict(insight: AIInsight, cached: bool = False) -> dict:
         try:
             deep = json.loads(insight.deep_analysis)
         except json.JSONDecodeError:
-            deep = {"background": insight.deep_analysis}
+            deep = {"summary": insight.deep_analysis}
 
-    # If no mode field, infer from content structure
-    if "mode" not in deep:
-        if "summary" in deep and "key_facts" in deep:
-            deep["mode"] = "news"
-        else:
-            deep["mode"] = "business"
+    # Remove legacy mode field if present
+    deep.pop("mode", None)
 
-    # Normalize business mode fields
-    if deep.get("mode") == "business":
-        if "opportunity" in deep and "opportunities" not in deep:
-            opp = deep.pop("opportunity", "")
-            deep["opportunities"] = [{"angle": "综合", "idea": opp}] if opp else []
-        if "opportunities" not in deep:
-            deep["opportunities"] = []
+    # Normalize legacy "opportunity" string → "opportunities" array
+    if "opportunity" in deep and "opportunities" not in deep:
+        opp = deep.pop("opportunity", "")
+        deep["opportunities"] = [{"angle": "综合", "idea": opp}] if opp else []
+    if "opportunities" not in deep:
+        deep["opportunities"] = []
+    if "key_facts" not in deep:
+        deep["key_facts"] = []
+    # Backward compat: old records without summary — use background as fallback
+    if not deep.get("summary") and deep.get("background"):
+        deep["summary"] = deep["background"]
 
     source_urls = []
     if insight.source_urls:
