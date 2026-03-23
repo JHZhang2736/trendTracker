@@ -8,8 +8,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.collectors.registry import registry
 from app.models.trend import Trend
+from app.services.platform_state import get_enabled_platforms
 
 # ---------------------------------------------------------------------------
 # Simple counts
@@ -102,7 +102,8 @@ async def get_trends(
     since = now - timedelta(hours=24)
     offset = (page - 1) * page_size
 
-    base_filter = Trend.collected_at >= since
+    enabled = get_enabled_platforms()
+    base_filter = (Trend.collected_at >= since) & (Trend.platform.in_(enabled))
     if platform:
         base_filter = base_filter & (Trend.platform == platform)
 
@@ -179,8 +180,9 @@ async def get_top_trends(
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     since = now - timedelta(hours=24)
+    enabled = get_enabled_platforms()
 
-    stmt = select(Trend).where(Trend.collected_at >= since)
+    stmt = select(Trend).where(Trend.collected_at >= since, Trend.platform.in_(enabled))
     if relevant_only:
         stmt = stmt.where(Trend.relevance_label == "relevant")
     result = await db.execute(stmt.order_by(Trend.collected_at.desc()))
@@ -246,9 +248,12 @@ async def get_top_trends_by_platform(db: AsyncSession, limit: int = 10) -> dict[
     """Return top-N keywords per platform, each scored with per-platform normalization."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     since = now - timedelta(hours=24)
+    enabled = get_enabled_platforms()
 
     result = await db.execute(
-        select(Trend).where(Trend.collected_at >= since).order_by(Trend.collected_at.desc())
+        select(Trend)
+        .where(Trend.collected_at >= since, Trend.platform.in_(enabled))
+        .order_by(Trend.collected_at.desc())
     )
     rows = result.scalars().all()
 
@@ -293,8 +298,8 @@ async def get_top_trends_by_platform(db: AsyncSession, limit: int = 10) -> dict[
 
 
 def get_platforms() -> list[str]:
-    """Return all registered platform slugs."""
-    return registry.list_platforms()
+    """Return enabled platform slugs."""
+    return get_enabled_platforms()
 
 
 # ---------------------------------------------------------------------------
@@ -322,13 +327,14 @@ async def get_keyword_velocity(
     t1_start = t0_start + period
     t2_start = t1_start + period
 
+    enabled = get_enabled_platforms()
     base = select(
         Trend.platform,
         Trend.keyword,
         Trend.heat_score,
         Trend.rank,
         Trend.collected_at,
-    ).where(Trend.collected_at >= t0_start)
+    ).where(Trend.collected_at >= t0_start, Trend.platform.in_(enabled))
     if platform:
         base = base.where(Trend.platform == platform)
 
@@ -410,9 +416,11 @@ async def get_heatmap(db: AsyncSession) -> dict:
     ]
     slot_index: dict[str, int] = {s.strftime("%Y-%m-%d %H"): i for i, s in enumerate(slots)}
 
+    enabled = get_enabled_platforms()
     result = await db.execute(
         select(Trend.platform, Trend.collected_at, Trend.heat_score).where(
-            Trend.collected_at >= since
+            Trend.collected_at >= since,
+            Trend.platform.in_(enabled),
         )
     )
     rows = result.all()

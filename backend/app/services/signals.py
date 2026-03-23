@@ -229,10 +229,13 @@ async def _detect_heat_surges(db: AsyncSession, now: datetime) -> list[SignalLog
 
 async def get_recent_signals(db: AsyncSession, hours: int = 24, limit: int = 50) -> list[SignalLog]:
     """Return most recent signals within the given time window."""
+    from app.services.platform_state import get_enabled_platforms
+
     since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+    enabled = get_enabled_platforms()
     result = await db.execute(
         select(SignalLog)
-        .where(SignalLog.detected_at >= since)
+        .where(SignalLog.detected_at >= since, SignalLog.platform.in_(enabled))
         .order_by(SignalLog.detected_at.desc())
         .limit(limit)
     )

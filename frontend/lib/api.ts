@@ -111,6 +111,7 @@ export interface SystemConfig {
   scheduler: { collect_cron: string }
   email: { configured: boolean; smtp_host: string; recipient: string | null }
   deep_analysis: { show_business: boolean }
+  platforms: Record<string, boolean>
 }
 
 export interface SchedulerStatus {
@@ -187,6 +188,11 @@ export const api = {
       request<{ show_business: boolean }>("/api/v1/system/deep-analysis-mode", {
         method: "PUT",
         body: JSON.stringify({ show }),
+      }),
+    togglePlatform: (platform: string, enabled: boolean) =>
+      request<{ platform: string; enabled: boolean }>("/api/v1/system/platforms", {
+        method: "PUT",
+        body: JSON.stringify({ platform, enabled }),
       }),
   },
   signals: {
