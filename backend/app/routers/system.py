@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.services.deep_analysis import get_show_business, set_show_business
+from app.services.platform_state import get_all_platform_states, set_platform_enabled
 
 router = APIRouter()
 
@@ -38,7 +39,20 @@ async def get_system_config() -> dict:
         "deep_analysis": {
             "show_business": get_show_business(),
         },
+        "platforms": get_all_platform_states(),
     }
+
+
+class PlatformToggleRequest(BaseModel):
+    platform: str
+    enabled: bool
+
+
+@router.put("/platforms", summary="切换平台信息源开关")
+async def toggle_platform(body: PlatformToggleRequest) -> dict:
+    """Enable or disable a platform data source."""
+    set_platform_enabled(body.platform, body.enabled)
+    return {"platform": body.platform, "enabled": body.enabled}
 
 
 class ShowBusinessRequest(BaseModel):

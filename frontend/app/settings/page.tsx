@@ -1,11 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Settings, RefreshCw, Trash2, CheckCircle, XCircle, Clock, Mail, Newspaper, Briefcase } from "lucide-react"
+import { Settings, RefreshCw, Trash2, CheckCircle, XCircle, Clock, Mail, Newspaper, Briefcase, Radio } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,6 +108,19 @@ export default function SettingsPage() {
     }
   }
 
+  const handleTogglePlatform = async (platform: string, enabled: boolean) => {
+    if (!config) return
+    try {
+      await api.system.togglePlatform(platform, enabled)
+      setConfig({
+        ...config,
+        platforms: { ...config.platforms, [platform]: enabled },
+      })
+    } catch {
+      /* ignore */
+    }
+  }
+
   const jobNameMap: Record<string, string> = {
     collect_trends: "采集热词",
     daily_brief: "生成日报",
@@ -195,6 +209,56 @@ export default function SettingsPage() {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">无法获取调度器状态，后端可能未启动</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 信息源开关 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Radio className="w-4 h-4" />
+            信息源管理
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            关闭的信息源不会参与采集，仪表盘和趋势列表中也不会显示对应数据
+          </p>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : config ? (
+            <div className="divide-y rounded-md border text-sm">
+              {PLATFORMS.map((slug) => {
+                const meta = getPlatformMeta(slug)
+                const enabled = config.platforms?.[slug] ?? true
+                const needsConfig = slug === "tiktok" && !config.tiktok.configured
+                return (
+                  <div key={slug} className="flex items-center justify-between px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: enabled ? meta.color : "#d1d5db" }}
+                      />
+                      <span className={`font-medium ${!enabled ? "text-muted-foreground" : ""}`}>
+                        {meta.displayName}
+                      </span>
+                      {needsConfig && (
+                        <span className="text-xs text-amber-500">需配置 TIKTOK_COOKIE</span>
+                      )}
+                    </div>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(checked) => handleTogglePlatform(slug, checked)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">无法加载配置</p>
           )}
         </CardContent>
       </Card>

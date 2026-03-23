@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const [signals, setSignals] = useState<SignalItem[]>([])
   const [signalsLoading, setSignalsLoading] = useState(true)
 
+  const [enabledPlatforms, setEnabledPlatforms] = useState<Set<string> | null>(null)
+
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealthError(true))
 
@@ -92,6 +94,17 @@ export default function DashboardPage() {
       .latestBrief()
       .then(setBrief)
       .catch(() => setBrief(null))
+
+    api.system
+      .config()
+      .then((cfg) => {
+        if (cfg.platforms) {
+          setEnabledPlatforms(
+            new Set(Object.entries(cfg.platforms).filter(([, v]) => v).map(([k]) => k))
+          )
+        }
+      })
+      .catch(() => {})
 
     api.trends
       .topByPlatform(10)

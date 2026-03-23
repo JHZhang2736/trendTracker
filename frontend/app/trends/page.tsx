@@ -377,7 +377,7 @@ function PlatformCard({
 // Main Page
 // ---------------------------------------------------------------------------
 
-const PLATFORMS = Object.keys(PLATFORM_CONFIG)
+const ALL_PLATFORMS = Object.keys(PLATFORM_CONFIG)
 
 export default function TrendsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
@@ -388,6 +388,21 @@ export default function TrendsPage() {
   const [compareKeyword, setCompareKeyword] = useState<string | null>(null)
   const [allItems, setAllItems] = useState<Record<string, TrendItem[]>>({})
   const [relevantOnly, setRelevantOnly] = useState(true)
+  const [enabledPlatforms, setEnabledPlatforms] = useState<string[]>(ALL_PLATFORMS)
+
+  useEffect(() => {
+    api.system
+      .config()
+      .then((cfg) => {
+        if (cfg.platforms) {
+          const enabled = Object.entries(cfg.platforms)
+            .filter(([, v]) => v)
+            .map(([k]) => k)
+          setEnabledPlatforms(enabled)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     api.trends
@@ -420,7 +435,7 @@ export default function TrendsPage() {
     setCompareKeyword((prev) => (prev === keyword ? null : keyword))
   }, [])
 
-  const visiblePlatforms = activePlatform ? [activePlatform] : PLATFORMS
+  const visiblePlatforms = activePlatform ? [activePlatform] : enabledPlatforms
 
   return (
     <div className="p-6 space-y-6">
@@ -482,7 +497,7 @@ export default function TrendsPage() {
           >
             全部
           </Badge>
-          {PLATFORMS.map((slug) => {
+          {enabledPlatforms.map((slug) => {
             const meta = getPlatformMeta(slug)
             return (
               <Badge
