@@ -84,12 +84,12 @@ export default function SettingsPage() {
     }
   }
 
-  const handleToggleMode = async () => {
+  const handleToggleBusiness = async () => {
     if (!config) return
-    const newMode = config.deep_analysis.mode === "business" ? "news" : "business"
+    const newShow = !config.deep_analysis.show_business
     try {
-      await api.system.setAnalysisMode(newMode)
-      setConfig({ ...config, deep_analysis: { mode: newMode } })
+      await api.system.setShowBusiness(newShow)
+      setConfig({ ...config, deep_analysis: { show_business: newShow } })
     } catch {
       /* ignore */
     }
@@ -269,22 +269,22 @@ export default function SettingsPage() {
                 <StatusBadge ok={config.ai.configured} />
               </div>
               <div className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-muted-foreground">深度分析模式</span>
+                <span className="text-muted-foreground">显示商业分析</span>
                 <Button
                   variant="outline"
                   size="sm"
                   className="gap-1.5 h-7 text-xs"
-                  onClick={handleToggleMode}
+                  onClick={handleToggleBusiness}
                 >
-                  {config.deep_analysis.mode === "news" ? (
+                  {config.deep_analysis.show_business ? (
                     <>
-                      <Newspaper className="w-3.5 h-3.5" />
-                      新闻简介
+                      <Briefcase className="w-3.5 h-3.5" />
+                      已开启
                     </>
                   ) : (
                     <>
-                      <Briefcase className="w-3.5 h-3.5" />
-                      商业分析
+                      <Newspaper className="w-3.5 h-3.5" />
+                      已关闭
                     </>
                   )}
                 </Button>

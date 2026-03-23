@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services.deep_analysis import get_analysis_mode, set_analysis_mode
+from app.services.deep_analysis import get_show_business, set_show_business
 
 router = APIRouter()
 
@@ -36,19 +36,17 @@ async def get_system_config() -> dict:
             "recipient": settings.alert_email_to or None,
         },
         "deep_analysis": {
-            "mode": get_analysis_mode(),
+            "show_business": get_show_business(),
         },
     }
 
 
-class AnalysisModeRequest(BaseModel):
-    mode: str
+class ShowBusinessRequest(BaseModel):
+    show: bool
 
 
-@router.put("/deep-analysis-mode", summary="切换深度分析模式（business/news）")
-async def update_analysis_mode(body: AnalysisModeRequest) -> dict:
-    """Toggle deep analysis mode between 'business' and 'news' at runtime."""
-    if body.mode not in ("business", "news"):
-        raise HTTPException(status_code=400, detail="mode must be 'business' or 'news'")
-    set_analysis_mode(body.mode)
-    return {"mode": body.mode}
+@router.put("/deep-analysis-mode", summary="切换是否显示商业分析")
+async def update_show_business(body: ShowBusinessRequest) -> dict:
+    """Toggle whether business analysis section is displayed in deep analysis cards."""
+    set_show_business(body.show)
+    return {"show_business": body.show}

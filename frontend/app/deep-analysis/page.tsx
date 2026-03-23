@@ -3,14 +3,14 @@
 import { useCallback, useState, useEffect } from "react"
 import {
   Search, RefreshCw, ExternalLink, TrendingUp, AlertTriangle,
-  Lightbulb, Zap, Newspaper, CheckCircle2,
+  Zap, Newspaper, CheckCircle2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api, type DeepAnalysisResponse } from "@/lib/api"
+import { api, type DeepAnalysisResponse, type SystemConfig } from "@/lib/api"
 
 const sentimentConfig = {
   positive: { label: "积极", className: "bg-green-100 text-green-700" },
@@ -24,7 +24,7 @@ function formatTime(iso: string | null) {
   return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
 }
 
-function NewsCard({ item }: { item: DeepAnalysisResponse }) {
+function AnalysisCard({ item, showBusiness }: { item: DeepAnalysisResponse; showBusiness: boolean }) {
   const [expanded, setExpanded] = useState(true)
   const da = item.deep_analysis
   const sentiment = sentimentConfig[da.sentiment] ?? sentimentConfig.neutral
@@ -38,13 +38,14 @@ function NewsCard({ item }: { item: DeepAnalysisResponse }) {
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base">{item.keyword}</CardTitle>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs gap-1">
-              <Newspaper className="w-3 h-3" />
-              新闻
-            </Badge>
             <Badge variant="outline" className={sentiment.className}>
               {sentiment.label}
             </Badge>
+            {item.analysis_type === "auto" && (
+              <Badge variant="secondary" className="text-xs">
+                自动
+              </Badge>
+            )}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -53,15 +54,17 @@ function NewsCard({ item }: { item: DeepAnalysisResponse }) {
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {/* Summary — always displayed */}
         <div className="flex items-start gap-2">
           <Newspaper className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">新闻摘要</p>
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">概述</p>
             <p className="text-sm">{da.summary || "—"}</p>
           </div>
         </div>
 
-        {expanded && da.key_facts && da.key_facts.length > 0 && (
+        {/* Key facts — always displayed */}
+        {expanded && da.key_facts.length > 0 && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">核心要点</p>
             <div className="space-y-1.5">
@@ -73,6 +76,50 @@ function NewsCard({ item }: { item: DeepAnalysisResponse }) {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Business analysis — conditionally displayed */}
+        {showBusiness && expanded && (
+          <>
+            {da.opportunities.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">商业机会</p>
+                <div className="space-y-2">
+                  {da.opportunities.map((opp, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <TrendingUp className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
+                      <div>
+                        <span className="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+                          {opp.angle}
+                        </span>
+                        <p className="text-sm mt-0.5">{opp.idea}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {da.risk && (
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-0.5">风险</p>
+                  <p className="text-sm">{da.risk}</p>
+                </div>
+              </div>
+            )}
+
+            {da.action && (
+              <div className="flex items-start gap-2">
+                <Zap className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-0.5">建议行动</p>
+                  <p className="text-sm">{da.action}</p>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {expanded && item.source_urls.length > 0 && (
@@ -106,130 +153,22 @@ function NewsCard({ item }: { item: DeepAnalysisResponse }) {
   )
 }
 
-function BusinessCard({ item }: { item: DeepAnalysisResponse }) {
-  const [expanded, setExpanded] = useState(true)
-  const da = item.deep_analysis
-  const sentiment = sentimentConfig[da.sentiment] ?? sentimentConfig.neutral
-
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader
-        className="pb-2 cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">{item.keyword}</CardTitle>
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="outline" className={sentiment.className}>
-              {sentiment.label}
-            </Badge>
-            {item.analysis_type === "auto" && (
-              <Badge variant="secondary" className="text-xs">
-                自动
-              </Badge>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {formatTime(item.created_at)} · {item.search_results_count} 条搜索结果 · {item.model}
-        </p>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <div className="flex items-start gap-2">
-          <Lightbulb className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">背景</p>
-            <p className="text-sm">{da.background || "—"}</p>
-          </div>
-        </div>
-
-        {(da.opportunities?.length ?? 0) > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1.5">商业机会</p>
-            <div className="space-y-2">
-              {da.opportunities!.slice(0, expanded ? undefined : 2).map((opp, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <TrendingUp className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
-                  <div>
-                    <span className="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
-                      {opp.angle}
-                    </span>
-                    <p className="text-sm mt-0.5">{opp.idea}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {expanded && (
-          <>
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">风险</p>
-                <p className="text-sm">{da.risk || "—"}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <Zap className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">建议行动</p>
-                <p className="text-sm">{da.action || "—"}</p>
-              </div>
-            </div>
-
-            {item.source_urls.length > 0 && (
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium text-muted-foreground mb-1">信息来源</p>
-                <div className="flex flex-wrap gap-1">
-                  {item.source_urls.map((url, i) => (
-                    <a
-                      key={i}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      来源{i + 1}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          {expanded ? "收起" : "展开详情"}
-        </button>
-      </CardContent>
-    </Card>
-  )
-}
-
-function AnalysisCard({ item }: { item: DeepAnalysisResponse }) {
-  const isNews = item.deep_analysis.mode === "news"
-  return isNews ? <NewsCard item={item} /> : <BusinessCard item={item} />
-}
-
 export default function DeepAnalysisPage() {
   const [analyses, setAnalyses] = useState<DeepAnalysisResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState("")
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState("")
+  const [showBusiness, setShowBusiness] = useState(true)
 
   const loadAnalyses = useCallback(async () => {
     try {
-      const data = await api.ai.listDeepAnalyses()
+      const [data, config] = await Promise.all([
+        api.ai.listDeepAnalyses(),
+        api.system.config(),
+      ])
       setAnalyses(data)
+      setShowBusiness(config.deep_analysis.show_business)
     } catch {
       /* empty */
     } finally {
@@ -262,7 +201,7 @@ export default function DeepAnalysisPage() {
       <div>
         <h1 className="text-2xl font-bold">深度分析</h1>
         <p className="text-muted-foreground mt-1">
-          网络搜索 + AI 生成结构化分析报告（可在设置中切换商业分析/新闻简介模式）
+          网络搜索 + AI 生成新闻概述与商业分析报告
         </p>
       </div>
 
@@ -321,7 +260,7 @@ export default function DeepAnalysisPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {analyses.map((item) => (
-            <AnalysisCard key={item.id} item={item} />
+            <AnalysisCard key={item.id} item={item} showBusiness={showBusiness} />
           ))}
         </div>
       )}
