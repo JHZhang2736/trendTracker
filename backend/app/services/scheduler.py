@@ -57,6 +57,15 @@ async def collect_trends_job(platforms: list[str] | None = None) -> None:
     Args:
         platforms: optional list of platform slugs. None = all platforms.
     """
+    # Filter by enabled platforms at runtime
+    from app.services.platform_state import is_platform_enabled
+
+    if platforms:
+        platforms = [p for p in platforms if is_platform_enabled(p)]
+        if not platforms:
+            logger.info("collect_trends_job: all requested platforms are disabled, skipping")
+            return
+
     label = ",".join(platforms) if platforms else "all"
     logger.info("collect_trends_job[%s]: starting", label)
     try:

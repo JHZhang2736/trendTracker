@@ -124,8 +124,14 @@ async def run_all_collectors(
 
     Returns a dict with ``status`` and ``records_count``.
     """
+    from app.services.platform_state import get_enabled_platforms
+
     if platforms is None:
-        platforms = registry.list_platforms()
+        platforms = get_enabled_platforms()
+    else:
+        # Even when explicit platforms are given, respect the enabled state
+        enabled = set(get_enabled_platforms())
+        platforms = [p for p in platforms if p in enabled]
 
     # Current hour bucket (naive UTC, matching DB storage)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
