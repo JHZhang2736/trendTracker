@@ -60,7 +60,8 @@ async def test_llm_analyze_success(monkeypatch):
 
     llm_response = json.dumps(
         {
-            "background": "背景信息",
+            "summary": "新闻概述信息",
+            "key_facts": ["要点1", "要点2"],
             "opportunities": [
                 {"angle": "技术/产品", "idea": "开发AI工具"},
                 {"angle": "内容/传播", "idea": "做科普视频"},
@@ -84,7 +85,8 @@ async def test_llm_analyze_success(monkeypatch):
     search_results = [SearchResult(title="T", snippet="S", url="https://a.com")]
     result = await _llm_analyze("AI芯片", search_results)
     assert result is not None
-    assert result["background"] == "背景信息"
+    assert result["summary"] == "新闻概述信息"
+    assert result["key_facts"] == ["要点1", "要点2"]
     assert result["sentiment"] == "positive"
     assert len(result["opportunities"]) == 2
     assert result["opportunities"][0]["angle"] == "技术/产品"
