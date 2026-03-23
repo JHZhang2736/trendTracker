@@ -17,7 +17,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { api, type SystemConfig, type SchedulerStatus, type CollectorRunResponse } from "@/lib/api"
+import { api, type SystemConfig, type SchedulerStatus } from "@/lib/api"
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+
+interface CollectEvent {
+  stage: string
+  message: string
+  platform?: string
+  count?: number
+  error?: string
+  records_count?: number
+  platforms?: { platform: string; count: number; error: string | null }[]
+  total?: number
+  relevant?: number
+  analyzed?: number
+}
 import { getPlatformMeta } from "@/lib/platform-config"
 
 const PLATFORMS = ["weibo", "google", "tiktok"] as const
@@ -41,7 +56,8 @@ export default function SettingsPage() {
   const [scheduler, setScheduler] = useState<SchedulerStatus | null>(null)
   const [platformLastPull, setPlatformLastPull] = useState<Record<string, string>>({})
   const [collecting, setCollecting] = useState(false)
-  const [collectResult, setCollectResult] = useState<CollectorRunResponse | null>(null)
+  const [collectLogs, setCollectLogs] = useState<CollectEvent[]>([])
+  const [collectDone, setCollectDone] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearResult, setClearResult] = useState<{ deleted: number } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,11 +91,43 @@ export default function SettingsPage() {
 
   const handleCollect = async () => {
     setCollecting(true)
-    setCollectResult(null)
+    setCollectLogs([])
+    setCollectDone(false)
     try {
-      const result = await api.post<CollectorRunResponse>("/api/v1/collector/run", {})
-      setCollectResult(result)
+      const res = await fetch(`${BASE_URL}/api/v1/collector/run-stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      if (!res.ok || !res.body) {
+        setCollectLogs([{ stage: "error", message: `请求失败: ${res.status}` }])
+        return
+      }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n\n")
+        buffer = lines.pop() ?? ""
+        for (const chunk of lines) {
+          const dataLine = chunk.replace(/^data: /, "").trim()
+          if (!dataLine) continue
+          try {
+            const event: CollectEvent = JSON.parse(dataLine)
+            setCollectLogs((prev) => [...prev, event])
+            if (event.stage === "done") {
+              setCollectDone(true)
+            }
+          } catch {
+            // ignore malformed events
+          }
+        }
+      }
       await load()
+    } catch {
+      setCollectLogs((prev) => [...prev, { stage: "error", message: "连接失败" }])
     } finally {
       setCollecting(false)
     }
@@ -179,7 +227,7 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="space-y-3">
                 <Button
                   size="sm"
                   variant="outline"
@@ -190,18 +238,30 @@ export default function SettingsPage() {
                   <RefreshCw className={`w-4 h-4 ${collecting ? "animate-spin" : ""}`} />
                   立即采集
                 </Button>
-                {collectResult && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">采集完成，共 {collectResult.records_count} 条</span>
-                    {collectResult.platforms.map((p) => (
-                      <Badge
-                        key={p.platform}
-                        variant={p.error ? "destructive" : "secondary"}
-                        className="text-xs"
-                      >
-                        {getPlatformMeta(p.platform).displayName}
-                        {p.error ? " ✗" : ` +${p.count}`}
-                      </Badge>
+                {collectLogs.length > 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3 space-y-1.5 text-sm max-h-60 overflow-y-auto">
+                    {collectLogs.map((log, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="shrink-0 mt-0.5">
+                          {log.stage === "done" ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                          ) : log.stage === "error" || log.error ? (
+                            <XCircle className="w-3.5 h-3.5 text-destructive" />
+                          ) : collectDone || i < collectLogs.length - 1 ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                          )}
+                        </span>
+                        <span className={log.stage === "done" ? "font-medium text-green-600" : log.error ? "text-destructive" : "text-muted-foreground"}>
+                          {log.message}
+                        </span>
+                        {log.stage === "collecting" && log.platform && !log.error && (
+                          <Badge variant="secondary" className="text-xs ml-auto">
+                            {getPlatformMeta(log.platform).displayName} +{log.count}
+                          </Badge>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}

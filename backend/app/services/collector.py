@@ -199,3 +199,146 @@ async def run_all_collectors(
         await auto_deep_analyze(db, relevance_scores)
 
     return {"status": "ok", "records_count": total_records, "platforms": platform_results}
+
+
+# ---------------------------------------------------------------------------
+# Streaming (SSE) variant — yields progress events as JSON dicts
+# ---------------------------------------------------------------------------
+
+
+async def run_all_collectors_stream(
+    db: AsyncSession,
+    platforms: list[str] | None = None,
+):
+    """Async generator that yields progress dicts for each pipeline stage.
+
+    Each yielded dict has at least ``{"stage": ..., "message": ...}``.
+    The final event has ``"stage": "done"``.
+    """
+    from app.services.platform_state import get_enabled_platforms
+
+    if platforms is None:
+        platforms = get_enabled_platforms()
+    else:
+        enabled = set(get_enabled_platforms())
+        platforms = [p for p in platforms if p in enabled]
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    hour_end = hour_start + timedelta(hours=1)
+
+    # --- Stage: collecting (per-platform) ---
+    yield {"stage": "collecting", "message": f"开始采集 {len(platforms)} 个平台..."}
+
+    # Collect platforms concurrently but report each result as it arrives
+    futures = [asyncio.ensure_future(_collect_one(slug)) for slug in platforms]
+    total_records = 0
+    platform_results = []
+
+    for coro in asyncio.as_completed(futures):
+        platform_slug, records, error = await coro
+        platform_results.append({"platform": platform_slug, "count": len(records), "error": error})
+
+        if error:
+            yield {
+                "stage": "collecting",
+                "platform": platform_slug,
+                "count": 0,
+                "error": error,
+                "message": f"{platform_slug} 采集失败: {error}",
+            }
+        else:
+            yield {
+                "stage": "collecting",
+                "platform": platform_slug,
+                "count": len(records),
+                "message": f"{platform_slug} 采集完成 +{len(records)} 条",
+            }
+
+        if records:
+            await db.execute(
+                delete(Trend).where(
+                    Trend.platform == platform_slug,
+                    Trend.collected_at >= hour_start,
+                    Trend.collected_at < hour_end,
+                )
+            )
+            platform_id = await _ensure_platform(db, platform_slug)
+            for rec in records:
+                db.add(
+                    Trend(
+                        platform_id=platform_id,
+                        platform=rec["platform"],
+                        keyword=rec["keyword"],
+                        rank=rec.get("rank"),
+                        heat_score=rec.get("heat_score"),
+                        url=rec.get("url"),
+                        collected_at=rec["collected_at"],
+                    )
+                )
+            total_records += len(records)
+
+    await db.commit()
+    yield {
+        "stage": "collected",
+        "records_count": total_records,
+        "platforms": platform_results,
+        "message": f"采集完成，共 {total_records} 条",
+    }
+
+    # --- Stage: scoring ---
+    from app.config import settings as app_settings
+
+    relevance_scores: dict[str, dict] = {}
+    if app_settings.relevance_filter_enabled and total_records > 0:
+        yield {"stage": "scoring", "message": "AI 相关性评分中..."}
+        relevance_scores = await _score_new_keywords(db, hour_start, hour_end)
+        relevant_count = sum(1 for v in relevance_scores.values() if v.get("label") == "relevant")
+        yield {
+            "stage": "scoring",
+            "total": len(relevance_scores),
+            "relevant": relevant_count,
+            "message": f"评分完成: {relevant_count}/{len(relevance_scores)} 条相关",
+        }
+
+    # --- Stage: signals ---
+    from app.services.signals import auto_analyze_signals, detect_signals
+
+    yield {"stage": "signals", "message": "信号检测中..."}
+    signals = await detect_signals(db)
+    yield {
+        "stage": "signals",
+        "count": len(signals),
+        "message": f"检测到 {len(signals)} 个信号",
+    }
+
+    from app.config import settings
+
+    if signals and settings.signal_auto_analyze_limit > 0:
+        yield {"stage": "signals", "message": "AI 分析信号中..."}
+        analyzed = await auto_analyze_signals(db, signals, limit=settings.signal_auto_analyze_limit)
+        yield {
+            "stage": "signals",
+            "analyzed": analyzed,
+            "message": f"已分析 {analyzed} 个信号",
+        }
+
+    # --- Stage: deep_analysis ---
+    if relevance_scores and settings.deep_analysis_auto_max > 0:
+        from app.services.deep_analysis import auto_deep_analyze
+
+        yield {"stage": "deep_analysis", "message": "深度分析中..."}
+        deep_results = await auto_deep_analyze(db, relevance_scores)
+        yield {
+            "stage": "deep_analysis",
+            "count": len(deep_results),
+            "message": f"深度分析完成: {len(deep_results)} 个关键词",
+        }
+
+    # --- Done ---
+    yield {
+        "stage": "done",
+        "records_count": total_records,
+        "platforms": platform_results,
+        "message": "全部完成",
+    }
