@@ -213,11 +213,17 @@ async def list_deep_analyses(db: AsyncSession, limit: int = 50) -> list[dict]:
 
 
 async def _web_search(keyword: str) -> list[SearchResult]:
-    """Search the web for context about a keyword."""
+    """Search the web for context about a keyword.
+
+    Uses fallback chain: if the primary provider returns 0 results (after its
+    own retries), the next provider in the chain is tried automatically.
+    """
     try:
-        provider = SearchFactory.create()
-        results = await provider.search(keyword, max_results=5)
-        logger.info("Web search for '%s': got %d results", keyword, len(results))
+        results = await SearchFactory.search_with_fallback(keyword, max_results=5)
+        if results:
+            logger.info("Web search for '%s': got %d results", keyword, len(results))
+        else:
+            logger.warning("Web search for '%s': all providers returned 0 results", keyword)
         return results
     except Exception:
         logger.exception("Web search failed for '%s'", keyword)
