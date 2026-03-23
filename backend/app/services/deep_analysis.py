@@ -6,6 +6,7 @@ web for context, and generates a structured deep analysis report.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -168,7 +169,10 @@ async def auto_deep_analyze(
     logger.info("Auto deep analysis: analyzing %d keywords: %s", len(top_keywords), top_keywords)
 
     results = []
-    for kw in top_keywords:
+    for i, kw in enumerate(top_keywords):
+        # Throttle: 2s delay between requests to avoid rate limiting
+        if i > 0:
+            await asyncio.sleep(2)
         try:
             result = await deep_analyze_keyword(kw, db, analysis_type="auto")
             if result:

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import logging
 from urllib.parse import parse_qs, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 from app.search.base import BaseSearchProvider, SearchResult
-
-logger = logging.getLogger(__name__)
 
 _HEADERS = {
     "User-Agent": (
@@ -29,14 +26,9 @@ class BingProvider(BaseSearchProvider):
 
     provider_name = "bing"
 
-    async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+    async def _do_search(self, query: str, max_results: int) -> list[SearchResult]:
         """Search Bing and return results."""
-        try:
-            results = await asyncio.to_thread(self._sync_search, query, max_results)
-            return results
-        except Exception:
-            logger.exception("Bing search failed for query: %s", query)
-            return []
+        return await asyncio.to_thread(self._sync_search, query, max_results)
 
     @staticmethod
     def _sync_search(query: str, max_results: int) -> list[SearchResult]:
