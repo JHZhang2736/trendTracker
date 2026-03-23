@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from app.search.base import BaseSearchProvider, SearchResult
-
-logger = logging.getLogger(__name__)
 
 
 class DuckDuckGoProvider(BaseSearchProvider):
@@ -15,14 +12,9 @@ class DuckDuckGoProvider(BaseSearchProvider):
 
     provider_name = "duckduckgo"
 
-    async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+    async def _do_search(self, query: str, max_results: int) -> list[SearchResult]:
         """Search DuckDuckGo and return results."""
-        try:
-            results = await asyncio.to_thread(self._sync_search, query, max_results)
-            return results
-        except Exception:
-            logger.exception("DuckDuckGo search failed for query: %s", query)
-            return []
+        return await asyncio.to_thread(self._sync_search, query, max_results)
 
     @staticmethod
     def _sync_search(query: str, max_results: int) -> list[SearchResult]:

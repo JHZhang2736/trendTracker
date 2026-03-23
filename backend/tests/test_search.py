@@ -13,7 +13,7 @@ class MockSearchProvider(BaseSearchProvider):
 
     provider_name = "mock"
 
-    async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+    async def _do_search(self, query: str, max_results: int) -> list[SearchResult]:
         return [
             SearchResult(
                 title=f"Result for {query}",
@@ -83,15 +83,19 @@ async def test_bing_provider_with_mock(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_bing_provider_failure(monkeypatch):
-    """BingProvider should return empty list on failure."""
+    """BingProvider should return empty list after retries on failure."""
     from app.search.bing import BingProvider
 
     def raise_err(*a, **kw):
         raise ConnectionError("network down")
 
+    import app.search.base as base_mod
     import app.search.bing as bing_mod
 
     monkeypatch.setattr(bing_mod.requests, "get", raise_err)
+    # Speed up retries for testing
+    monkeypatch.setattr(base_mod, "MAX_RETRIES", 1)
+    monkeypatch.setattr(base_mod, "BASE_DELAY", 0.01)
     provider = BingProvider()
     results = await provider.search("测试")
     assert results == []
