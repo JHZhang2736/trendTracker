@@ -14,18 +14,21 @@ async def test_web_search_returns_list(monkeypatch):
     """Web search should return a list (even on failure)."""
     from app.search.base import SearchResult
 
-    class MockProvider:
-        provider_name = "mock"
+    mock_results = [
+        SearchResult(title="T1", snippet="S1", url="https://a.com"),
+        SearchResult(title="T2", snippet="S2", url="https://b.com"),
+    ]
 
-        async def search(self, query, max_results=5):
-            return [
-                SearchResult(title="T1", snippet="S1", url="https://a.com"),
-                SearchResult(title="T2", snippet="S2", url="https://b.com"),
-            ]
+    async def mock_search_with_fallback(query, max_results=5):
+        return mock_results
 
     monkeypatch.setattr(
         "app.services.deep_analysis.SearchFactory",
-        type("MockFactory", (), {"create": classmethod(lambda cls: MockProvider())}),
+        type(
+            "MockFactory",
+            (),
+            {"search_with_fallback": staticmethod(mock_search_with_fallback)},
+        ),
     )
 
     results = await _web_search("AI芯片")
@@ -37,15 +40,16 @@ async def test_web_search_returns_list(monkeypatch):
 async def test_web_search_failure_returns_empty(monkeypatch):
     """On search failure, should return empty list."""
 
-    class FailProvider:
-        provider_name = "fail"
-
-        async def search(self, query, max_results=5):
-            raise RuntimeError("Search down")
+    async def mock_search_with_fallback(query, max_results=5):
+        raise RuntimeError("Search down")
 
     monkeypatch.setattr(
         "app.services.deep_analysis.SearchFactory",
-        type("MockFactory", (), {"create": classmethod(lambda cls: FailProvider())}),
+        type(
+            "MockFactory",
+            (),
+            {"search_with_fallback": staticmethod(mock_search_with_fallback)},
+        ),
     )
 
     results = await _web_search("AI芯片")

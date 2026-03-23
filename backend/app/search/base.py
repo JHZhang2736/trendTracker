@@ -31,20 +31,35 @@ class BaseSearchProvider(ABC):
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
         """Search with exponential backoff retry.
 
-        Subclasses implement :meth:`_do_search` instead of overriding this.
+        Retries on both exceptions AND empty results (may indicate silent
+        rate-limiting or transient failures).  Subclasses implement
+        :meth:`_do_search` instead of overriding this.
         """
         last_exc: Exception | None = None
         for attempt in range(MAX_RETRIES):
             try:
                 results = await self._do_search(query, max_results)
-                if attempt > 0:
-                    logger.info(
-                        "%s search succeeded on attempt %d for '%s'",
-                        self.provider_name,
-                        attempt + 1,
-                        query,
-                    )
-                return results
+                if results:
+                    if attempt > 0:
+                        logger.info(
+                            "%s search succeeded on attempt %d for '%s' (%d results)",
+                            self.provider_name,
+                            attempt + 1,
+                            query,
+                            len(results),
+                        )
+                    return results
+                # Empty results — treat as transient failure, retry
+                delay = BASE_DELAY * (2**attempt)
+                logger.warning(
+                    "%s search returned 0 results on attempt %d/%d for '%s'" " — retrying in %.1fs",
+                    self.provider_name,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    query,
+                    delay,
+                )
+                await asyncio.sleep(delay)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 delay = BASE_DELAY * (2**attempt)
@@ -59,13 +74,21 @@ class BaseSearchProvider(ABC):
                 )
                 await asyncio.sleep(delay)
 
-        logger.error(
-            "%s search failed after %d attempts for '%s': %s",
-            self.provider_name,
-            MAX_RETRIES,
-            query,
-            last_exc,
-        )
+        if last_exc:
+            logger.error(
+                "%s search failed after %d attempts for '%s': %s",
+                self.provider_name,
+                MAX_RETRIES,
+                query,
+                last_exc,
+            )
+        else:
+            logger.error(
+                "%s search returned 0 results after %d attempts for '%s'",
+                self.provider_name,
+                MAX_RETRIES,
+                query,
+            )
         return []
 
     @abstractmethod
