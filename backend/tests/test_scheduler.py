@@ -172,7 +172,7 @@ async def test_cleanup_old_trends_job_runs_without_error():
 
 def test_setup_scheduler_registers_per_platform_jobs():
     sched = setup_scheduler()
-    for platform in ("weibo", "google", "tiktok"):
+    for platform in ("weibo", "douyin", "toutiao"):
         job = sched.get_job(f"collect_{platform}")
         assert job is not None, f"collect_{platform} job not registered"
 
@@ -181,7 +181,7 @@ def test_per_platform_jobs_have_cron_trigger():
     from apscheduler.triggers.cron import CronTrigger
 
     sched = setup_scheduler()
-    for platform in ("weibo", "google", "tiktok"):
+    for platform in ("weibo", "douyin", "toutiao"):
         job = sched.get_job(f"collect_{platform}")
         assert isinstance(job.trigger, CronTrigger)
 
@@ -198,7 +198,7 @@ def test_get_jobs_status_contains_per_platform_jobs():
     setup_scheduler()
     status = get_jobs_status()
     ids = [j["id"] for j in status]
-    for platform in ("weibo", "google", "tiktok"):
+    for platform in ("weibo", "douyin", "toutiao"):
         assert f"collect_{platform}" in ids
 
 

@@ -49,5 +49,13 @@ services:
       - backend
     restart: unless-stopped
 
+  dailyhot:
+    image: imsyy/dailyhot-api:latest
+    pull_policy: if_not_present
+    container_name: trendtracker-dailyhot
+    ports:
+      - "6688:6688"
+    restart: unless-stopped
+
 volumes:
   mysql_data:

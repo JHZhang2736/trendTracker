@@ -15,6 +15,9 @@ from app.models.trend import Trend
 
 logger = logging.getLogger(__name__)
 
+# Number of concurrent workers pulling from the collection queue.
+_NUM_WORKERS = 5
+
 
 async def _score_new_keywords(
     db: AsyncSession,
@@ -94,7 +97,14 @@ async def _ensure_platform(db: AsyncSession, slug: str) -> int:
     return platform.id
 
 
-async def _collect_one(platform_slug: str) -> tuple[str, list[dict], str | None]:
+# ---------------------------------------------------------------------------
+# Queue-based collection helpers
+# ---------------------------------------------------------------------------
+
+_CollectResult = tuple[str, list[dict], str | None]  # (slug, records, error)
+
+
+async def _collect_one(platform_slug: str) -> _CollectResult:
     """Run a single collector and return (platform_slug, records, error). Never raises."""
     collector_cls = registry.get(platform_slug)
     try:
@@ -105,16 +115,66 @@ async def _collect_one(platform_slug: str) -> tuple[str, list[dict], str | None]
         return platform_slug, [], str(exc)
 
 
+async def _queue_worker(
+    queue: asyncio.Queue[str],
+    results: list[_CollectResult],
+) -> None:
+    """Worker that pulls platform slugs from *queue* and collects them."""
+    while True:
+        slug = await queue.get()
+        try:
+            result = await _collect_one(slug)
+            results.append(result)
+        finally:
+            queue.task_done()
+
+
+async def _run_collection_queue(platforms: list[str]) -> list[_CollectResult]:
+    """Enqueue all *platforms* and collect via a fixed-size worker pool."""
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    results: list[_CollectResult] = []
+
+    for slug in platforms:
+        queue.put_nowait(slug)
+
+    workers = [asyncio.create_task(_queue_worker(queue, results)) for _ in range(_NUM_WORKERS)]
+    await queue.join()
+
+    for w in workers:
+        w.cancel()
+
+    return results
+
+
+async def _queue_worker_stream(
+    queue: asyncio.Queue[str],
+    out: asyncio.Queue[_CollectResult],
+) -> None:
+    """Worker that collects and pushes results to *out* for streaming."""
+    while True:
+        slug = await queue.get()
+        try:
+            result = await _collect_one(slug)
+            await out.put(result)
+        finally:
+            queue.task_done()
+
+
+# ---------------------------------------------------------------------------
+# Main entry points
+# ---------------------------------------------------------------------------
+
+
 async def run_all_collectors(
     db: AsyncSession,
     platforms: list[str] | None = None,
 ) -> dict:
-    """Run collectors concurrently, persist results, return summary.
+    """Run collectors via a queue-based worker pool, persist results, return summary.
 
     Args:
         db: async database session.
         platforms: optional list of platform slugs to collect.
-                   If None, all registered platforms are collected.
+                   If None, all enabled platforms are collected.
 
     Each platform uses replace-by-hour semantics: existing records for the same
     platform within the current clock-hour are deleted before inserting the fresh
@@ -129,7 +189,6 @@ async def run_all_collectors(
     if platforms is None:
         platforms = get_enabled_platforms()
     else:
-        # Even when explicit platforms are given, respect the enabled state
         enabled = set(get_enabled_platforms())
         platforms = [p for p in platforms if p in enabled]
 
@@ -138,8 +197,8 @@ async def run_all_collectors(
     hour_start = now.replace(minute=0, second=0, microsecond=0)
     hour_end = hour_start + timedelta(hours=1)
 
-    # Collect from all platforms in parallel
-    results = await asyncio.gather(*(_collect_one(slug) for slug in platforms))
+    # Collect via queue workers
+    results = await _run_collection_queue(platforms)
 
     total_records = 0
     platform_results = []
@@ -227,16 +286,24 @@ async def run_all_collectors_stream(
     hour_start = now.replace(minute=0, second=0, microsecond=0)
     hour_end = hour_start + timedelta(hours=1)
 
-    # --- Stage: collecting (per-platform) ---
+    # --- Stage: collecting (per-platform via queue workers) ---
     yield {"stage": "collecting", "message": f"开始采集 {len(platforms)} 个平台..."}
 
-    # Collect platforms concurrently but report each result as it arrives
-    futures = [asyncio.ensure_future(_collect_one(slug)) for slug in platforms]
+    in_q: asyncio.Queue[str] = asyncio.Queue()
+    out_q: asyncio.Queue[_CollectResult] = asyncio.Queue()
+
+    for slug in platforms:
+        in_q.put_nowait(slug)
+
+    workers = [asyncio.create_task(_queue_worker_stream(in_q, out_q)) for _ in range(_NUM_WORKERS)]
+
     total_records = 0
     platform_results = []
+    collected = 0
 
-    for coro in asyncio.as_completed(futures):
-        platform_slug, records, error = await coro
+    while collected < len(platforms):
+        platform_slug, records, error = await out_q.get()
+        collected += 1
         platform_results.append({"platform": platform_slug, "count": len(records), "error": error})
 
         if error:
@@ -277,6 +344,9 @@ async def run_all_collectors_stream(
                     )
                 )
             total_records += len(records)
+
+    for w in workers:
+        w.cancel()
 
     await db.commit()
     yield {
