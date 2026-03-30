@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Settings, RefreshCw, Trash2, CheckCircle, XCircle, Clock, Mail, Newspaper, Briefcase, Radio } from "lucide-react"
+import { Settings, Trash2, CheckCircle, XCircle, Clock, Mail, Newspaper, Briefcase, Radio } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,24 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { api, type SystemConfig, type SchedulerStatus } from "@/lib/api"
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
-
-interface CollectEvent {
-  stage: string
-  message: string
-  platform?: string
-  count?: number
-  error?: string
-  records_count?: number
-  platforms?: { platform: string; count: number; error: string | null }[]
-  total?: number
-  relevant?: number
-  analyzed?: number
-}
 import { getPlatformMeta } from "@/lib/platform-config"
-
-const PLATFORMS = ["weibo", "google", "tiktok"] as const
 
 function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
   return ok ? (
@@ -55,9 +38,6 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<SystemConfig | null>(null)
   const [scheduler, setScheduler] = useState<SchedulerStatus | null>(null)
   const [platformLastPull, setPlatformLastPull] = useState<Record<string, string>>({})
-  const [collecting, setCollecting] = useState(false)
-  const [collectLogs, setCollectLogs] = useState<CollectEvent[]>([])
-  const [collectDone, setCollectDone] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearResult, setClearResult] = useState<{ deleted: number } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -88,50 +68,6 @@ export default function SettingsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
-
-  const handleCollect = async () => {
-    setCollecting(true)
-    setCollectLogs([])
-    setCollectDone(false)
-    try {
-      const res = await fetch(`${BASE_URL}/api/v1/collector/run-stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
-      if (!res.ok || !res.body) {
-        setCollectLogs([{ stage: "error", message: `请求失败: ${res.status}` }])
-        return
-      }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ""
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n\n")
-        buffer = lines.pop() ?? ""
-        for (const chunk of lines) {
-          const dataLine = chunk.replace(/^data: /, "").trim()
-          if (!dataLine) continue
-          try {
-            const event: CollectEvent = JSON.parse(dataLine)
-            setCollectLogs((prev) => [...prev, event])
-            if (event.stage === "done") {
-              setCollectDone(true)
-            }
-          } catch {
-            // ignore malformed events
-          }
-        }
-      }
-      await load()
-    } catch {
-      setCollectLogs((prev) => [...prev, { stage: "error", message: "连接失败" }])
-    } finally {
-      setCollecting(false)
-    }
-  }
 
   const handleToggleBusiness = async () => {
     if (!config) return
@@ -226,46 +162,6 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-
-              <div className="space-y-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCollect}
-                  disabled={collecting}
-                  className="gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${collecting ? "animate-spin" : ""}`} />
-                  立即采集
-                </Button>
-                {collectLogs.length > 0 && (
-                  <div className="rounded-md border bg-muted/30 p-3 space-y-1.5 text-sm max-h-60 overflow-y-auto">
-                    {collectLogs.map((log, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="shrink-0 mt-0.5">
-                          {log.stage === "done" ? (
-                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                          ) : log.stage === "error" || log.error ? (
-                            <XCircle className="w-3.5 h-3.5 text-destructive" />
-                          ) : collectDone || i < collectLogs.length - 1 ? (
-                            <CheckCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                          ) : (
-                            <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-                          )}
-                        </span>
-                        <span className={log.stage === "done" ? "font-medium text-green-600" : log.error ? "text-destructive" : "text-muted-foreground"}>
-                          {log.message}
-                        </span>
-                        {log.stage === "collecting" && log.platform && !log.error && (
-                          <Badge variant="secondary" className="text-xs ml-auto">
-                            {getPlatformMeta(log.platform).displayName} +{log.count}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">无法获取调度器状态，后端可能未启动</p>
@@ -290,32 +186,44 @@ export default function SettingsPage() {
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : config ? (
-            <div className="divide-y rounded-md border text-sm">
-              {PLATFORMS.map((slug) => {
-                const meta = getPlatformMeta(slug)
-                const enabled = config.platforms?.[slug] ?? true
-                const needsConfig = slug === "tiktok" && !config.tiktok.configured
-                return (
-                  <div key={slug} className="flex items-center justify-between px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: enabled ? meta.color : "#d1d5db" }}
-                      />
-                      <span className={`font-medium ${!enabled ? "text-muted-foreground" : ""}`}>
-                        {meta.displayName}
-                      </span>
-                      {needsConfig && (
-                        <span className="text-xs text-amber-500">需配置 TIKTOK_COOKIE</span>
-                      )}
+            <div className="space-y-3">
+              {(() => {
+                const slugs = Object.keys(config.platforms ?? {})
+                const grouped: Record<string, string[]> = {}
+                for (const slug of slugs) {
+                  const cat = getPlatformMeta(slug).category
+                  if (!grouped[cat]) grouped[cat] = []
+                  grouped[cat].push(slug)
+                }
+                return Object.entries(grouped).map(([category, platforms]) => (
+                  <div key={category}>
+                    <p className="text-xs text-muted-foreground mb-1.5 font-medium">{category}</p>
+                    <div className="divide-y rounded-md border text-sm">
+                      {platforms.map((slug) => {
+                        const meta = getPlatformMeta(slug)
+                        const enabled = config.platforms?.[slug] ?? true
+                        return (
+                          <div key={slug} className="flex items-center justify-between px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-block w-2 h-2 rounded-full"
+                                style={{ backgroundColor: enabled ? meta.color : "#d1d5db" }}
+                              />
+                              <span className={`font-medium ${!enabled ? "text-muted-foreground" : ""}`}>
+                                {meta.displayName}
+                              </span>
+                            </div>
+                            <Switch
+                              checked={enabled}
+                              onCheckedChange={(checked) => handleTogglePlatform(slug, checked)}
+                            />
+                          </div>
+                        )
+                      })}
                     </div>
-                    <Switch
-                      checked={enabled}
-                      onCheckedChange={(checked) => handleTogglePlatform(slug, checked)}
-                    />
                   </div>
-                )
-              })}
+                ))
+              })()}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">无法加载配置</p>
@@ -335,10 +243,11 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="divide-y rounded-md border text-sm">
-              {PLATFORMS.map((slug) => {
+              {Object.keys(config?.platforms ?? {}).map((slug) => {
                 const meta = getPlatformMeta(slug)
+                const enabled = config?.platforms?.[slug] ?? true
+                if (!enabled) return null
                 const lastPull = platformLastPull[slug]
-                const needsConfig = slug === "tiktok" && config && !config.tiktok.configured
                 return (
                   <div key={slug} className="flex items-center justify-between px-3 py-2.5">
                     <div className="flex items-center gap-2">
@@ -349,9 +258,6 @@ export default function SettingsPage() {
                       <span className="font-medium">{meta.displayName}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {needsConfig && (
-                        <span className="text-xs text-amber-500">需配置 TIKTOK_COOKIE</span>
-                      )}
                       {lastPull ? (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />

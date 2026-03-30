@@ -47,3 +47,12 @@ logs/
 
 # Alembic
 backend/alembic/versions/*.pyc
+
+# Conversation history (local only)
+docs/conversation_history.md
+
+# Temp files
+prompt_test.txt
+prompt_v3.txt
+scoring_test*.txt
+trends_debug.txt

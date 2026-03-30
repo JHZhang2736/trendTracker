@@ -93,8 +93,26 @@ def _get_platform_crons() -> dict[str, str]:
     default = settings.collect_cron
     mapping = {
         "weibo": settings.weibo_cron,
-        "google": settings.google_cron,
-        "tiktok": settings.tiktok_cron,
+        "douyin": settings.douyin_cron,
+        "toutiao": settings.toutiao_cron,
+        "qq-news": settings.qq_news_cron,
+        "netease-news": settings.netease_news_cron,
+        "sina-news": settings.sina_news_cron,
+        "nytimes": settings.nytimes_cron,
+        "zhihu": settings.zhihu_cron,
+        "zhihu-daily": settings.zhihu_daily_cron,
+        "tieba": settings.tieba_cron,
+        "hupu": settings.hupu_cron,
+        "douban-group": settings.douban_group_cron,
+        "36kr": settings.kr36_cron,
+        "producthunt": settings.producthunt_cron,
+        "github": settings.github_cron,
+        "hackernews": settings.hackernews_cron,
+        "bilibili": settings.bilibili_cron,
+        "kuaishou": settings.kuaishou_cron,
+        "smzdm": settings.smzdm_cron,
+        "coolapk": settings.coolapk_cron,
+        "yystv": settings.yystv_cron,
     }
     # Fill empty values with default
     return {platform: (cron or default) for platform, cron in mapping.items()}

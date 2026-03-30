@@ -23,9 +23,6 @@ async def get_system_config() -> dict:
             "provider": settings.llm_provider,
             "configured": bool(settings.minimax_api_key and settings.minimax_group_id),
         },
-        "tiktok": {
-            "configured": bool(settings.tiktok_cookie),
-        },
         "scheduler": {
             "collect_cron": settings.collect_cron,
         },

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["feature/**", "fix/**", "chore/**"]
+    branches: ["main", "feature/**", "fix/**", "chore/**"]
   pull_request:
     branches: ["main"]
 
@@ -62,3 +62,28 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  changelog:
+    name: Update Changelog
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Generate changelog
+        run: git-cliff -o CHANGELOG.md
+
+      - name: Commit changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "docs: update CHANGELOG.md"
+          git push

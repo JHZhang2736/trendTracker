@@ -1,6 +1,6 @@
 ## 注意事项
-- 将我所有跟你对话的历史记录记录在docs内的一个文件中，我的提问必须记录，你的回复可以省略或者简写
-- `cd` 命令永远不要与 git 命令组合使用（不要写 `cd xxx && git ...`），git 命令始终使用 `-C <path>` 指定目录
+
+> 行为规则已迁移至 `.claude/rules/` 目录，包括：git 命令规范、heredoc 禁止、开发流程、PR 自动合并、commit 规范、对话记录等。
 
 ---
 
@@ -46,20 +46,10 @@
 
 ## 开发规范
 
-### 开发流程（必须遵守）
-1. 开发前先在 GitHub 创建 Issue，记录功能点和验收标准
-2. 基于 Issue 创建功能分支：`feature/issue-{n}-{desc}`
-3. 开发完成后确保测试通过，再提交 PR 合并到 main
-4. PR 使用 Squash Merge，合并后删除功能分支
+### 开发流程 / 分支策略 / Commit 规范
 
-### 分支策略
-- `main` 禁止直接 push，所有变更通过 PR（Squash Merge）合并
-- 分支命名：`feature/issue-{n}-{desc}` / `fix/issue-{n}-{desc}` / `chore/{desc}`
-
-### Commit 规范（Conventional Commits）
-格式：`<type>(<scope>): <subject>`
-- `feat` 新功能 / `fix` 修复 / `refactor` 重构 / `test` 测试 / `chore` 工程 / `docs` 文档
-- commit 信息中不要使用Co-Authored-By
+> 已迁移至 `.claude/rules/dev-workflow.md` 和 `.claude/rules/commit-convention.md`
+> 分支命名：`feature/issue-{n}-{desc}` / `fix/issue-{n}-{desc}` / `chore/{desc}`
 
 ### 代码规范
 **Python**：`ruff`（lint + import排序）+ `black`（格式化），行宽 100，配置在 `pyproject.toml`

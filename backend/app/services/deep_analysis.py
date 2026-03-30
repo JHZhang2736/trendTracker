@@ -168,17 +168,34 @@ async def auto_deep_analyze(
 
     logger.info("Auto deep analysis: analyzing %d keywords: %s", len(top_keywords), top_keywords)
 
-    results = []
-    for i, kw in enumerate(top_keywords):
-        # Throttle: 2s delay between requests to avoid rate limiting
-        if i > 0:
-            await asyncio.sleep(2)
-        try:
-            result = await deep_analyze_keyword(kw, db, analysis_type="auto")
-            if result:
-                results.append(result)
-        except Exception:
-            logger.exception("Auto deep analysis failed for '%s'", kw)
+    # Concurrent analysis via asyncio.Queue worker pool
+    _da_workers = 3
+    queue: asyncio.Queue[str] = asyncio.Queue()
+    for kw in top_keywords:
+        queue.put_nowait(kw)
+
+    results: list[dict] = []
+    lock = asyncio.Lock()
+
+    async def worker() -> None:
+        while True:
+            kw = await queue.get()
+            try:
+                result = await deep_analyze_keyword(kw, db, analysis_type="auto")
+                if result:
+                    async with lock:
+                        results.append(result)
+            except Exception:
+                logger.exception("Auto deep analysis failed for '%s'", kw)
+            finally:
+                queue.task_done()
+
+    workers = [
+        asyncio.create_task(worker()) for _ in range(min(_da_workers, len(top_keywords)))
+    ]
+    await queue.join()
+    for w in workers:
+        w.cancel()
 
     return results
 

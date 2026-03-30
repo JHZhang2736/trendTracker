@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -15,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { CollectButton } from "@/components/CollectButton"
 
 const navItems: { title: string; href: string; icon: LucideIcon }[] = [
   { title: "仪表盘", href: "/", icon: LayoutDashboard },
@@ -57,6 +59,10 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="p-4">
+        <CollectButton />
+      </SidebarFooter>
     </Sidebar>
   )
 }

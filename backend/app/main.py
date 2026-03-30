@@ -15,7 +15,9 @@ from app.services.scheduler import setup_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup — import collectors first to trigger registration
+    import app.collectors  # noqa: F401
+
     print(f"TrendTracker backend starting — LLM provider: {settings.llm_provider}")
     sched = setup_scheduler()
     sched.start()

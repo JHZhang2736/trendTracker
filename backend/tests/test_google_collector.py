@@ -212,11 +212,14 @@ async def test_mock_collector_no_network():
 
 
 # ---------------------------------------------------------------------------
-# Integration: registry picks up Google platform
+# Integration: registry picks up DailyHot platforms (Google removed)
 # ---------------------------------------------------------------------------
 
 
-def test_google_registered_in_registry():
+def test_dailyhot_platforms_registered_in_registry():
     from app.collectors.registry import registry
 
-    assert "google" in registry.list_platforms()
+    platforms = registry.list_platforms()
+    assert "zhihu" in platforms
+    assert "bilibili" in platforms
+    assert "douyin" in platforms

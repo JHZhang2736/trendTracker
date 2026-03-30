@@ -7,7 +7,6 @@ import {
   Minus,
   ExternalLink,
   Flame,
-  RefreshCw,
   Search,
   Download,
   X,
@@ -381,7 +380,6 @@ const ALL_PLATFORMS = Object.keys(PLATFORM_CONFIG)
 
 export default function TrendsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
-  const [refreshing, setRefreshing] = useState(false)
   const [velocityMap, setVelocityMap] = useState<Record<string, VelocityItem>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
@@ -417,15 +415,6 @@ export default function TrendsPage() {
       .catch(() => setVelocityMap({}))
   }, [refreshKey])
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try {
-      await api.post("/api/v1/collector/run", {})
-      setRefreshKey((k) => k + 1)
-    } finally {
-      setRefreshing(false)
-    }
-  }, [])
 
   const handleItemsLoaded = useCallback((platform: string, items: TrendItem[]) => {
     setAllItems((prev) => ({ ...prev, [platform]: items }))
@@ -448,16 +437,6 @@ export default function TrendsPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">近24小时各平台热词 Top 50</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-          立即采集
-        </Button>
       </div>
 
       {/* Search + Platform Filter */}

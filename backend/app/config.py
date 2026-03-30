@@ -28,11 +28,55 @@ class Settings(BaseSettings):
     deep_analysis_cooldown_hours: int = 24  # skip re-analysis within this window
     deep_analysis_mode: str = "business"  # "business" or "news"
 
-    # Scheduler — global default and per-platform overrides
+    # DailyHot API (self-hosted aggregator)
+    dailyhot_api_url: str = "http://localhost:6688"
+
+    # Scheduler — global default and per-platform overrides (empty = use collect_cron)
     collect_cron: str = "0 6 * * *"
-    weibo_cron: str = "0 */2 * * *"  # every 2 hours (hot search has short half-life)
-    google_cron: str = ""  # empty = use collect_cron
-    tiktok_cron: str = "0 */6 * * *"  # every 6 hours
+    weibo_cron: str = "0 */2 * * *"
+    douyin_cron: str = ""
+    toutiao_cron: str = ""
+    qq_news_cron: str = ""
+    netease_news_cron: str = ""
+    sina_news_cron: str = ""
+    nytimes_cron: str = ""
+    zhihu_cron: str = ""
+    zhihu_daily_cron: str = ""
+    tieba_cron: str = ""
+    hupu_cron: str = ""
+    douban_group_cron: str = ""
+    kr36_cron: str = ""
+    producthunt_cron: str = ""
+    github_cron: str = ""
+    hackernews_cron: str = ""
+    bilibili_cron: str = ""
+    kuaishou_cron: str = ""
+    smzdm_cron: str = ""
+    coolapk_cron: str = ""
+    yystv_cron: str = ""
+
+    # Platform enable/disable (PLATFORM_XXX=false in .env to disable by default)
+    platform_weibo: bool = True
+    platform_douyin: bool = True
+    platform_toutiao: bool = True
+    platform_qq_news: bool = True
+    platform_netease_news: bool = True
+    platform_sina_news: bool = True
+    platform_nytimes: bool = True
+    platform_zhihu: bool = True
+    platform_zhihu_daily: bool = True
+    platform_tieba: bool = True
+    platform_hupu: bool = True
+    platform_douban_group: bool = True
+    platform_36kr: bool = True
+    platform_producthunt: bool = True
+    platform_github: bool = True
+    platform_hackernews: bool = True
+    platform_bilibili: bool = True
+    platform_kuaishou: bool = True
+    platform_smzdm: bool = True
+    platform_coolapk: bool = True
+    platform_yystv: bool = True
 
     # Signal-driven AI analysis
     signal_auto_analyze_limit: int = 3  # max signals to auto-analyze per detection run
@@ -47,9 +91,6 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     alert_email_to: str = ""
-
-    # TikTok
-    tiktok_cookie: str = ""  # Paste browser Cookie header from ads.tiktok.com session
 
     @property
     def database_url(self) -> str:

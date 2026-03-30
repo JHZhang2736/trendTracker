@@ -6,6 +6,7 @@ in a single LLM call.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Maximum keywords per LLM call to stay within token limits
 _BATCH_SIZE = 30
 
+# Number of concurrent LLM requests for scoring batches
+_NUM_WORKERS = 3
+
 
 async def score_relevance(
     keywords: list[str],
@@ -25,17 +29,39 @@ async def score_relevance(
 ) -> dict[str, dict]:
     """Score a list of keywords for personal relevance using LLM.
 
+    Batches are processed concurrently via an asyncio.Queue worker pool.
     Returns a dict keyed by keyword with ``score`` (0-100), ``label``
     ("relevant" | "irrelevant"), and ``reason`` (one-line explanation).
     """
     if not keywords:
         return {}
 
+    batches = [keywords[i : i + _BATCH_SIZE] for i in range(0, len(keywords), _BATCH_SIZE)]
+
+    if len(batches) == 1:
+        return await _score_batch(batches[0], user_profile)
+
+    queue: asyncio.Queue[list[str]] = asyncio.Queue()
+    for batch in batches:
+        queue.put_nowait(batch)
+
     results: dict[str, dict] = {}
-    for i in range(0, len(keywords), _BATCH_SIZE):
-        batch = keywords[i : i + _BATCH_SIZE]
-        batch_result = await _score_batch(batch, user_profile)
-        results.update(batch_result)
+    lock = asyncio.Lock()
+
+    async def worker() -> None:
+        while True:
+            batch = await queue.get()
+            try:
+                batch_result = await _score_batch(batch, user_profile)
+                async with lock:
+                    results.update(batch_result)
+            finally:
+                queue.task_done()
+
+    workers = [asyncio.create_task(worker()) for _ in range(min(_NUM_WORKERS, len(batches)))]
+    await queue.join()
+    for w in workers:
+        w.cancel()
 
     return results
 

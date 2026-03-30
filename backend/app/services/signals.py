@@ -8,6 +8,7 @@ Three signal types:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -259,12 +260,11 @@ async def auto_analyze_signals(db: AsyncSession, signals: list[SignalLog], limit
     # Sort by value descending (biggest jump / surge first), take top N
     ranked = sorted(signals, key=lambda s: s.value or 0, reverse=True)[:limit]
 
-    analyzed = 0
-    for sig in ranked:
-        try:
-            from app.ai.base import ChatMessage
-            from app.ai.factory import LLMFactory
+    from app.ai.base import ChatMessage
+    from app.ai.factory import LLMFactory
 
+    async def _analyze_one(sig: SignalLog) -> bool:
+        try:
             provider = LLMFactory.create()
             resp = await provider.chat(
                 [
@@ -276,10 +276,14 @@ async def auto_analyze_signals(db: AsyncSession, signals: list[SignalLog], limit
                 ]
             )
             sig.ai_summary = resp.content[:500] if resp.content else None
-            analyzed += 1
             logger.info("auto_analyze_signals: analyzed %r (%s)", sig.keyword, sig.signal_type)
+            return True
         except Exception as exc:  # noqa: BLE001
             logger.warning("auto_analyze_signals: failed for %r — %s", sig.keyword, exc)
+            return False
+
+    results = await asyncio.gather(*(_analyze_one(s) for s in ranked))
+    analyzed = sum(1 for r in results if r)
 
     if analyzed:
         await db.commit()
