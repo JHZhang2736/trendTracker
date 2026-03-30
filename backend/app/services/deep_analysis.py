@@ -190,9 +190,7 @@ async def auto_deep_analyze(
             finally:
                 queue.task_done()
 
-    workers = [
-        asyncio.create_task(worker()) for _ in range(min(_da_workers, len(top_keywords)))
-    ]
+    workers = [asyncio.create_task(worker()) for _ in range(min(_da_workers, len(top_keywords)))]
     await queue.join()
     for w in workers:
         w.cancel()

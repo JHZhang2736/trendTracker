@@ -295,9 +295,7 @@ async def run_all_collectors_stream(
     for slug in platforms:
         in_q.put_nowait(slug)
 
-    workers = [
-        asyncio.create_task(_queue_worker_stream(in_q, out_q)) for _ in range(_NUM_WORKERS)
-    ]
+    workers = [asyncio.create_task(_queue_worker_stream(in_q, out_q)) for _ in range(_NUM_WORKERS)]
 
     total_records = 0
     platform_results = []
